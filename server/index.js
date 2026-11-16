@@ -68,4 +68,5 @@ const dist = fileURLToPath(new URL('../web/dist', import.meta.url))
 app.use(express.static(dist))
 
 const port = process.env.PORT || 3001
-app.listen(port, '127.0.0.1', () => console.log(`API en http://127.0.0.1:${port}`))
+const host = process.env.HOST || '127.0.0.1'
+app.listen(port, host, () => console.log(`API en http://${host}:${port}`))

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 async function req(url, opts) {
   const r = await fetch(url, opts)
+  if (!r.headers.get('content-type')?.includes('application/json'))
+    throw new Error('No se pudo conectar con la API. Comprueba la configuración del servidor.')
   const d = await r.json()
   if (!r.ok) throw new Error(d.error || 'Error')
   return d
