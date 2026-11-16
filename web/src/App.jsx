@@ -10,6 +10,7 @@ import pause from '@iconify-icons/solar/pause-bold-duotone'
 import next from '@iconify-icons/solar/skip-next-bold-duotone'
 import previous from '@iconify-icons/solar/skip-previous-bold-duotone'
 import close from '@iconify-icons/solar/close-circle-bold-duotone'
+import checkCircle from '@iconify-icons/solar/check-circle-bold'
 import { useEffect, useRef, useState } from 'react'
 import { searchApi, playlistApi, downloadApi, batchFileUrl, useJobs } from './api.js'
 import { cached } from './cache.js'
@@ -54,7 +55,9 @@ export default function App() {
   const { jobs, batches } = useJobs()
   const [initiated, setInitiated] = useState([])
   const downloaded = useRef(new Set())
-  const [queueMessage, setQueueMessage] = useState('')
+  const [queueMessage, setQueueMessage] = useState(null)
+  const toastId = useRef(0)
+  const showToast = (text) => setQueueMessage({ text, id: ++toastId.current })
   const active = jobs.filter((j) => j.status === 'queued' || j.status === 'downloading').length
 
   useEffect(() => {
@@ -68,10 +71,16 @@ export default function App() {
         document.body.appendChild(link)
         link.click()
         link.remove()
-        setQueueMessage(batch.failed ? 'Tu descarga está lista; algunas canciones fallaron.' : 'Tu descarga está lista.')
-      } else setQueueMessage('No se pudo completar la descarga. Revisa la cola para reintentar.')
+        showToast('Tu descarga está lista.')
+        if (batch.failed) setError('Algunas canciones fallaron. Revisa la cola para reintentar.')
+      } else setError('No se pudo completar la descarga. Revisa la cola para reintentar.')
     }
   }, [batches, initiated])
+  useEffect(() => {
+    if (!queueMessage) return
+    const timer = setTimeout(() => setQueueMessage(null), 4250)
+    return () => clearTimeout(timer)
+  }, [queueMessage])
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('sonora-theme', theme) }, [theme])
   useEffect(() => {
     const h = (e) => { if (e.key === '/' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName)) { e.preventDefault(); input.current?.focus() } }
@@ -173,7 +182,7 @@ export default function App() {
     if (sending) return
     if (items.length > 200) { setError('Selecciona hasta 200 canciones por descarga.'); return }
     setError(''); setSending(true)
-    try { const batch = await downloadApi(items.map(({ id, title, index }) => ({ id, title, index })), albumName); setInitiated((current) => [...current, batch.bid]); setQueueMessage('Añadido a descargas.'); setSel(new Map()) }
+    try { const batch = await downloadApi(items.map(({ id, title, index }) => ({ id, title, index })), albumName); setInitiated((current) => [...current, batch.bid]); showToast('Añadido a descargas.'); setSel(new Map()) }
     catch (e) { setError(e.message) }
     finally { setSending(false) }
   }
@@ -189,15 +198,15 @@ export default function App() {
       <section className="intro"><div className="eyebrow"><span /> TU MÚSICA, A TU RITMO</div><h1>Encuentra tu próximo<br /><em>favorito.</em></h1><p>Busca, escucha y guarda la música que te mueve.</p></section>
       <section className="search-area" aria-label="Buscar música">
         <form className="search-box" onSubmit={(e) => { e.preventDefault(); search(q) }}>
-          <Icon className="search-icon" icon={searchIcon} width="24" aria-hidden="true" /><label className="sr-only" htmlFor="music-search">Canción, artista o álbum</label><input id="music-search" ref={input} value={q} onChange={(e) => { setQ(e.target.value); setSuggestionsOpen(true) }} onFocus={() => setSuggestionsOpen(true)} onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)} autoComplete="off" placeholder="¿Qué quieres escuchar?" /><kbd>/</kbd><button className="primary-button" type="submit" disabled={!q.trim()}>Buscar <Icon icon={arrowUp} width="18" aria-hidden="true" /></button>
+          <Icon className="search-icon" icon={searchIcon} width="24" aria-hidden="true" /><label className="sr-only" htmlFor="music-search">Canción, artista o álbum</label><input id="music-search" ref={input} value={q} onChange={(e) => { setQ(e.target.value); setSuggestionsOpen(true) }} onFocus={() => setSuggestionsOpen(true)} onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)} autoComplete="off" placeholder="¿Qué quieres escuchar?" /><kbd className="keyboard-shortcut">/</kbd><button className="primary-button" type="submit" disabled={!q.trim()}>Buscar <Icon icon={arrowUp} width="18" aria-hidden="true" /></button>
         </form>
         {suggestionsOpen && suggestions.length > 0 && <div className="suggestions"><span>BÚSQUEDAS RECIENTES</span>{suggestions.map((item) => <button key={item} onMouseDown={(e) => e.preventDefault()} onClick={() => search(item)}><Icon icon={arrowUp} width="18" aria-hidden="true" /> <span>{item}</span></button>)}</div>}
-        <p className="search-hint">Busca canciones, artistas o playlists <span>·</span> Presiona <kbd>/</kbd> para buscar</p>
+        <p className="search-hint">Busca canciones, artistas o playlists <span className="keyboard-shortcut">· Presiona <kbd>/</kbd> para buscar</span></p>
       </section>
 
       {!album && results?.partial && <div className="notice" role="status">No se pudieron cargar las playlists; los resultados son parciales.</div>}
       {album?.truncated && <div className="notice" role="status">Esta playlist muestra sus primeras 200 canciones.</div>}
-      {queueMessage && <div className="notice" role="status">{queueMessage}</div>}
+
       {error && <div className="notice error" role="alert">{error}</div>}
       {sending && <div className="loading-line" role="status"><Logo loading /><span>Preparando descargas…</span></div>}
       <div className={`content-layout ${results ? 'has-results' : ''} ${preview ? 'has-preview' : ''} ${pending === 'search' || pending === 'album' ? 'is-searching' : ''}`}>
@@ -232,6 +241,7 @@ export default function App() {
       </div>
     </main>
     <div className={`selection-bar ${sel.size ? 'visible' : ''}`} aria-hidden={!sel.size}><span><strong>{sel.size}</strong> {sel.size === 1 ? 'canción seleccionada' : 'canciones seleccionadas'}</span><button className="primary-button" disabled={!sel.size || sending} onClick={() => send([...sel.values()], album?.title)}>Descargar {album ? 'playlist' : 'selección'} <Icon icon={download} width="18" aria-hidden="true" /></button></div>
+    <div className="toast-region" role="status" aria-live="polite" aria-atomic="true">{queueMessage && <div className="toast" key={queueMessage.id}><Icon icon={checkCircle} className="toast-icon" aria-hidden="true" /><span>{queueMessage.text}</span></div>}</div>
     <DownloadQueue jobs={jobs} batches={batches} open={queueOpen} onClose={() => setQueueOpen(false)} />
   </div>
 }

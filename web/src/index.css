@@ -13,12 +13,10 @@
 @media(max-width:900px){.topbar{padding:0 24px}.workspace{padding:48px 24px 0}.content-layout{grid-template-columns:minmax(0,1fr) 250px;gap:28px}.playlist-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.top-note{display:none}}@media(max-width:650px){.topbar{height:70px;padding:0 18px}.top-actions{gap:8px}.queue-trigger{font-size:0;gap:7px}.queue-trigger>span{font-size:14px}.workspace{padding:40px 18px 0}.intro h1{font-size:46px}.search-area{margin:28px 0 42px}.search-box{gap:8px;padding-left:12px}.search-box>kbd{display:none}.search-box .primary-button{padding:14px}.content-layout{display:flex;flex-direction:column-reverse;gap:35px}.side-column,.results{width:100%}.player-placeholder{height:170px}.record{width:135px;height:135px}.record>div{width:52px;height:52px}.side-caption{display:none}.playlist-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.playing-label{display:none}.selection-bar{width:calc(100% - 24px);justify-content:space-between;gap:8px}.selection-bar .primary-button{gap:8px;padding:12px}.section-heading{align-items:start;flex-direction:column}.track-row{gap:8px}.track-check span{display:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 
-/* The desktop workspace stays put; only the results and download list scroll. */
+/* Compact desktop spacing. */
 @media(min-width:901px) and (min-height:780px){
-  html,body,#root{height:100%;overflow:hidden}
-  .app-shell{height:100%;min-height:0;padding-bottom:0;display:flex;flex-direction:column}
   .topbar{height:72px;flex:none}
-  .workspace{width:100%;flex:1;min-height:0;display:flex;flex-direction:column;padding:25px 48px 24px}
+  .workspace{width:100%;padding:25px 48px 24px}
   .intro{flex:none}
   .intro h1{font-size:clamp(35px,3.2vw,48px);line-height:1.02;margin:10px 0 7px}
   .intro h1 br{display:none}
@@ -26,8 +24,7 @@
   .intro p{font-size:13px}
   .search-area{flex:none;width:100%;margin:20px 0 18px}
   .search-hint{margin:8px 3px 0}
-  .content-layout{flex:1;min-height:0;align-items:stretch;gap:36px}
-  .results{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 12px 100px 0;scrollbar-color:var(--border) transparent;scrollbar-width:thin}
+  .content-layout{gap:36px}
   .side-column{min-height:0;align-self:start}
   .player-placeholder{height:clamp(135px,22vh,220px)}
   .record{width:clamp(110px,17vh,165px);height:clamp(110px,17vh,165px)}
@@ -36,7 +33,6 @@
   .section-heading{margin-bottom:20px}
   .playlist-section{margin-bottom:24px}
   .playlist-image{aspect-ratio:1.6}
-  .empty-state{height:100%;min-height:200px}
   .loading-line{margin:-8px 0 8px;flex:none}
   .notice{flex:none}
 }
@@ -64,7 +60,6 @@
 .loading-dots i:nth-child(2){animation-delay:.15s}.loading-dots i:nth-child(3){animation-delay:.3s}
 @keyframes loader-pulse{0%,100%{transform:scale(.92);opacity:.18}50%{transform:scale(1.06);opacity:.5}}
 @keyframes loading-dot{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
-@media(min-width:901px) and (min-height:780px){.results-area{height:100%}.results-area .results{height:100%}.search-loading{min-height:0}}
 @media(prefers-reduced-motion:reduce){.loader-ring,.loading-dots i,.loader-orbit .is-loading path{animation:none}}
 
 /* Soft mint surfaces share the same light source in both themes. */
@@ -352,3 +347,44 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
   @keyframes player-rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 }
 @media(max-width:650px) and (prefers-reduced-motion:reduce){.content-layout.has-preview .side-column.player-expanded{animation:none}}
+
+@media (hover: none), (max-width: 650px) {
+  .keyboard-shortcut { display: none; }
+}
+
+.toast-region{position:fixed;z-index:30;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);max-width:calc(100% - 32px);pointer-events:none}
+.selection-bar.visible ~ .toast-region{bottom:calc(100px + env(safe-area-inset-bottom))}
+.toast{display:flex;align-items:center;gap:12px;min-width:min(300px,calc(100vw - 32px));padding:16px 20px;border-radius:20px;background:var(--surface-2);color:var(--text);box-shadow:var(--surface-shadow);font-size:12px;line-height:1.4;animation:toast-enter .25s var(--ease) both,toast-exit .25s var(--ease) 4s forwards}
+.toast-icon{width:22px;height:22px;flex:none;color:var(--accent-strong)}
+@keyframes toast-enter{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toast-exit{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(20px)}}
+@media (prefers-reduced-motion: reduce){.toast{animation:none}}
+
+.topbar{position:sticky;top:0;z-index:15}
+@media(min-width:651px){.side-column{position:sticky;top:100px}}
+@media(min-width:901px) and (min-height:780px){.side-column{top:88px}}
+
+/* Download drawer: a compact list with a clear action for each batch. */
+.drawer header{flex:none;align-items:center;margin-bottom:16px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+.drawer header .section-kicker{margin-bottom:6px}
+.drawer h2{display:flex;align-items:baseline;gap:10px}
+.drawer h2 span{color:var(--muted);font-size:13px}
+.drawer > ul{flex:1;min-height:0;margin:0 -12px;padding:0 12px calc(24px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+.drawer .batch{padding:20px 0;border-bottom:1px solid var(--border)}
+.batch-heading{align-items:flex-start;gap:16px;line-height:1.45}
+.batch-heading strong{font-size:14px}
+.batch-heading span{font-size:12px;font-variant-numeric:tabular-nums}
+.batch .progress-track{height:5px;margin:12px 0;background:var(--surface-3);box-shadow:none}
+.batch > .job-meta{align-items:center;min-height:44px;font-size:12px}
+.batch > .job-meta .text-button{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:12px;background:var(--surface-2);color:var(--accent-strong);font-weight:700}
+.drawer .batch .batch-jobs{margin:0;padding:0;overflow:visible}
+.batch .batch-jobs:empty{display:none}
+.batch .job{margin:8px 0 0;padding:12px;background:var(--surface-2);border-radius:12px;box-shadow:none}
+.batch .job-motion{background:var(--surface-3)}
+.batch .job-meta{align-items:center;min-height:24px}
+.batch .job-meta button{min-height:44px;padding:0 8px}
+.queue-empty{padding:28px 0;font-size:14px}
+@media(max-width:650px){
+  .drawer{inset:0;width:100%;height:100dvh;padding:calc(20px + env(safe-area-inset-top)) 20px 0;border-radius:0;box-shadow:none}
+  .drawer header{margin-bottom:8px}
+}
