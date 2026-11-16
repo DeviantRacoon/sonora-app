@@ -195,6 +195,8 @@ export default function App() {
         <p className="search-hint">Busca canciones, artistas o playlists <span>·</span> Presiona <kbd>/</kbd> para buscar</p>
       </section>
 
+      {!album && results?.partial && <div className="notice" role="status">No se pudieron cargar las playlists; los resultados son parciales.</div>}
+      {album?.truncated && <div className="notice" role="status">Esta playlist muestra sus primeras 200 canciones.</div>}
       {queueMessage && <div className="notice" role="status">{queueMessage}</div>}
       {error && <div className="notice error" role="alert">{error}</div>}
       {sending && <div className="loading-line" role="status"><Logo loading /><span>Preparando descargas…</span></div>}

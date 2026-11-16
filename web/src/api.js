@@ -25,6 +25,7 @@ export function useJobs() {
       const item = JSON.parse(e.data)
       if (item.type === 'job') setState((p) => ({ ...p, jobs: { ...p.jobs, [item.jid]: item } }))
       if (item.type === 'batch') setState((p) => ({ ...p, batches: { ...p.batches, [item.bid]: item } }))
+      if (item.type === 'batch_removed') setState((p) => ({ jobs: Object.fromEntries(Object.entries(p.jobs).filter(([, job]) => job.bid !== item.bid)), batches: Object.fromEntries(Object.entries(p.batches).filter(([bid]) => bid !== item.bid)) }))
     }
     return () => es.close()
   }, [])

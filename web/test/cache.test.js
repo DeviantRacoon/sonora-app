@@ -21,3 +21,16 @@ test('failed requests can be retried', async () => {
   await assert.rejects(cached(cache, 'playlist', () => { throw new Error('offline') }))
   assert.equal(await cached(cache, 'playlist', () => 'ok'), 'ok')
 })
+
+test('expires results, bounds the cache and retries partial responses', async () => {
+  const cache = new Map()
+  let calls = 0
+  const load = () => ({ count: ++calls })
+  await cached(cache, 'old', load)
+  cache.get('old').expires = Date.now() - 1
+  assert.equal((await cached(cache, 'old', load)).count, 2)
+  await cached(cache, 'partial', () => ({ partial: true }))
+  assert.equal(cache.has('partial'), false)
+  for (let i = 0; i < 210; i++) await cached(cache, String(i), load)
+  assert.equal(cache.size, 200)
+})

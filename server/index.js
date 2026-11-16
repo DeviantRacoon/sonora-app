@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { access } from 'node:fs/promises'
 import { ZipFile } from 'yazl'
 import { search, playlist, isVideoId, isPlaylistId, safeName } from './services/ytdlp.js'
-import { enqueue, retry, snapshot, batchSnapshot, getBatch, events } from './services/queue.js'
+import { enqueue, retry, snapshot, batchSnapshot, getBatch, holdFiles, events } from './services/queue.js'
+import { cached } from './services/cache.js'
 
 const app = express()
 app.use(express.json())
@@ -13,27 +14,32 @@ const wrap = (fn) => (req, res) => fn(req, res).catch((e) => res.status(500).jso
 app.get('/api/search', wrap(async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 200)
   if (!q) return res.status(400).json({ error: 'Falta q' })
-  res.json(await search(q))
+  res.json(await cached(`search:${q}`, () => search(q)))
 }))
 
 app.get('/api/playlist', wrap(async (req, res) => {
   const id = String(req.query.id || '')
   if (!isPlaylistId(id)) return res.status(400).json({ error: 'ID de playlist inválido' })
-  res.json(await playlist(id))
+  res.json(await cached(`playlist:${id}`, () => playlist(id)))
 }))
 
-app.post('/api/downloads', (req, res) => {
+app.post('/api/downloads', wrap(async (req, res) => {
   const { items, album } = req.body || {}
   if (!Array.isArray(items) || !items.length || items.length > 200 || !items.every((i) => isVideoId(i?.id)))
     return res.status(400).json({ error: 'Items inválidos' })
-  res.json(enqueue(items.map((i) => ({ id: i.id, title: String(i.title || i.id), index: i.index })), album ? String(album) : null))
-})
+  const batch = enqueue(items.map((i) => ({ id: i.id, title: String(i.title || i.id), index: i.index })), album ? String(album) : null)
+  if (!batch) return res.status(429).json({ error: 'La cola está llena; inténtalo más tarde' })
+  res.json(batch)
+}))
 
 app.get('/api/downloads/batches/:bid/file', wrap(async (req, res) => {
   const batch = getBatch(req.params.bid)
   if (!batch) return res.status(404).json({ error: 'Descarga no encontrada' })
   if (!batch.available || !batch.ready) return res.status(409).json({ error: 'La descarga todavía no está lista' })
-  await Promise.all(batch.files.map(({ file }) => access(file)))
+  const release = holdFiles(batch.files)
+  res.once('close', release)
+  res.once('finish', release)
+  try { await Promise.all(batch.files.map(({ file }) => access(file))) } catch (e) { release(); throw e }
   if (batch.total === 1) return res.download(batch.files[0].file, `${safeName(batch.files[0].title)}.mp3`)
   res.attachment(`${safeName(batch.title)}.zip`)
   const archive = new ZipFile()
