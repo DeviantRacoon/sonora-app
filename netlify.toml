@@ -1,0 +1,13 @@
+[build]
+  command = "bun run build:netlify"
+  publish = "web/dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[server]
+  path = "/api/*"
+  includedFiles = ["netlify/server/bin/*"]
+
+[server.scale]
+  max = 1

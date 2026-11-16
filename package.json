@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently -n api,web \"bun run --filter server dev\" \"bun run --filter web dev\"",
     "build": "bun run --filter web build",
+    "build:netlify": "bash netlify/prepare-binaries.sh && bun run build",
     "start": "bun run --filter server start"
   },
   "devDependencies": { "concurrently": "^9.0.0" }

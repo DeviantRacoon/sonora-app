@@ -2,3 +2,4 @@ node_modules
 music
 web/dist
 bin
+netlify/server/bin/
