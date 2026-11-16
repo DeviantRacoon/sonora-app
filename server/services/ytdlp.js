@@ -5,6 +5,7 @@ import path from 'node:path'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 
 const BIN = process.env.YTDLP_PATH || 'yt-dlp'
+const jsRuntime = process.env.YTDLP_JS_RUNTIME ? ['--js-runtimes', `node:${process.execPath}`] : []
 export const MUSIC_DIR = process.env.MUSIC_DIR || fileURLToPath(new URL('../../music', import.meta.url))
 export const isVideoId = (s) => typeof s === 'string' && /^[\w-]{11}$/.test(s)
 export const isPlaylistId = (s) => typeof s === 'string' && /^[\w-]{12,64}$/.test(s)
@@ -54,7 +55,7 @@ function processResult(p, timeout, onStdout, maxOutput = Infinity) {
 
 function json(args) {
   return querySlot(async () => {
-    const p = spawn(BIN, [...args, '-J', '--flat-playlist', '--no-warnings'])
+    const p = spawn(BIN, [...args, ...jsRuntime, '-J', '--flat-playlist', '--no-warnings'])
     let out = ''
     await processResult(p, 60_000, (d) => { out += d }, 10 * 1024 * 1024)
     try { return JSON.parse(out) } catch { throw new Error('Respuesta inválida de yt-dlp') }
@@ -81,7 +82,7 @@ export async function playlist(id) {
 
 export async function download({ id, directory }, onProgress) {
   await mkdir(directory, { recursive: true })
-  const p = spawn(BIN, ['-x', '--audio-format', 'mp3', '--audio-quality', '320K', '--embed-thumbnail', '--embed-metadata', '--no-playlist', '--newline', '--progress', '--progress-template', 'PCT:%(progress._percent_str)s', '--print', 'after_move:FILE:%(filepath)s', '-o', path.join(directory, '%(title)s.%(ext)s'), `https://www.youtube.com/watch?v=${id}`])
+  const p = spawn(BIN, [...jsRuntime, '-x', '--audio-format', 'mp3', '--audio-quality', '320K', '--embed-thumbnail', '--embed-metadata', '--no-playlist', '--newline', '--progress', '--progress-template', 'PCT:%(progress._percent_str)s', '--print', 'after_move:FILE:%(filepath)s', '-o', path.join(directory, '%(title)s.%(ext)s'), `https://www.youtube.com/watch?v=${id}`])
   let out = '', file = ''
   await processResult(p, 30 * 60_000, (d) => {
     out += d

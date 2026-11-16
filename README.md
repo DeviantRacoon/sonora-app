@@ -23,20 +23,11 @@ bun run start
 
 El servidor sirve la interfaz compilada y la API en `http://127.0.0.1:3001`. Puedes configurar `PORT` y `HOST`; por ejemplo, usa `HOST=0.0.0.0` si tu proveedor necesita conectarse al servidor desde fuera del contenedor.
 
-## Publicar la interfaz en Netlify por arrastre
+## Publicar en Netlify
 
-1. Ejecuta `bun install` y `bun run build` en tu computadora.
-2. La carpeta resultante es `web/dist`. Arrástrala a [Netlify Drop](https://app.netlify.com/drop). Netlify no ejecuta el build al publicar mediante arrastre.
+Conecta el repositorio al sitio de Netlify. En **Build settings**, deja vacíos el directorio base y el directorio de paquete, para que se use la raíz del repositorio. El archivo `netlify.toml` configura Node 24, `bun run build:netlify` y `web/dist`; el build descarga yt-dlp, FFmpeg y ffprobe para Linux x64 e incluye el servidor. Después despliega desde Git o con la CLI de Netlify (27.17.0 o posterior). Arrastrar `web/dist` solo publica la interfaz y no incluye el servidor.
 
-La carpeta compilada contiene solo la interfaz. Para que funcionen las búsquedas y descargas, necesitas publicar por separado el servidor Node con `yt-dlp` y FFmpeg instalados y un directorio de música escribible. Configura `HOST=0.0.0.0` y el puerto indicado por el proveedor, e inicia con `bun run start`.
-
-Una vez que tengas la URL HTTPS del servidor, crea un archivo llamado `_redirects` dentro de `web/dist` con esta línea, reemplazando el dominio por el de tu servidor:
-
-```text
-/api/*  https://tu-servidor.example.com/api/:splat  200
-```
-
-Arrastra de nuevo `web/dist` a Netlify. Cada vez que ejecutes `bun run build`, vuelve a crear `_redirects` antes de publicar. Los proxies de Netlify tienen un límite de 26 segundos: las búsquedas lentas, el progreso en directo y las descargas largas pueden interrumpirse. El servidor no tiene autenticación: cualquiera que conozca su URL puede usar su API.
+El servidor usa Netlify Server, disponible en acceso anticipado. La cola y los archivos se guardan en `/tmp`: se pierden cuando la instancia se detiene o se reemplaza, y los trabajos pueden interrumpirse. El servidor no tiene autenticación: cualquiera que conozca su URL puede usar su API. Las peticiones a YouTube también pueden fallar si este bloquea la dirección del servidor.
 
 Para ejecutar las pruebas:
 
