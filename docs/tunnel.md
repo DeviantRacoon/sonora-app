@@ -2,6 +2,19 @@
 
 El túnel permite abrir Sonora desde un celular u otro equipo mediante una URL HTTPS. Apunta al backend local, que sirve tanto `/api` como el frontend compilado: todo utiliza un mismo origen.
 
+## Instalar cloudflared
+
+El script espera el binario en `bin/cloudflared` (ignorado por Git). Ejemplo en Linux x86_64:
+
+```sh
+mkdir -p bin
+curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o bin/cloudflared
+chmod +x bin/cloudflared
+bin/cloudflared --version
+```
+
+Para otras plataformas descarga el binario desde las [descargas oficiales](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/). Si lo tienes instalado en el sistema, enlázalo con `ln -s "$(command -v cloudflared)" bin/cloudflared`.
+
 ## Iniciar
 
 Necesitas Bun, Node, yt-dlp, FFmpeg, Docker activo, dependencias instaladas, `.env` configurado y `bin/cloudflared` ejecutable. Ese binario es local y no se incluye en el repositorio; si lo instalaste en el sistema, adapta su ruta en el script `tunnel:run` de `package.json`.
@@ -41,6 +54,10 @@ Cada navegador conserva su propio identificador de descargas y su credencial de 
 La URL HTTPS permite instalar la PWA desde Ajustes. La API, el audio y los archivos no se almacenan en la caché offline: aunque la interfaz instalada abra sin conexión, el servidor y el túnel deben estar disponibles para buscar, preparar música y descargar.
 
 Si reinicias el Quick Tunnel y cambia el dominio, el navegador trata la URL nueva como otro origen: obtiene otro perfil e historial visible. Los datos del servidor no se borran por ese cambio, pero los identificadores guardados en el dominio viejo no se trasladan automáticamente. La PWA instalada también sigue apuntando al dominio anterior; tendrás que abrir e instalar la URL nueva. Para conservar perfiles, historial e instalación entre reinicios, necesitas un dominio estable.
+
+## Dominio fijo (opcional)
+
+El Quick Tunnel cambia de URL al reiniciar. Para una URL estable crea un túnel con nombre en una cuenta de Cloudflare con un dominio propio (consulta la [guía oficial](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)), apunta su ingress a `http://127.0.0.1:3001` y sustituye en el script `tunnel:run` de `package.json` el comando `cloudflared tunnel --url …` por `cloudflared tunnel run <nombre>`. Los túneles con nombre no tienen las restricciones de los Quick Tunnels, aunque la app seguirá usando consultas periódicas en lugar de SSE solo en `trycloudflare.com`.
 
 ## Detener y comprobar
 
