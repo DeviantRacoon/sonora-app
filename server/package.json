@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch index.js",
-    "start": "node index.js",
+    "dev": "node --watch --import ./env.js index.js",
+    "start": "NODE_ENV=production node --import ./env.js index.js",
     "test": "node --test"
   },
   "dependencies": {
     "express": "^4.21.0",
+    "pg": "^8.23.1",
     "yazl": "^3.3.1"
   }
 }

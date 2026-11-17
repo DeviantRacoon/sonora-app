@@ -20,6 +20,8 @@ setTimeout(() => { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writ
   const socket = createServer(); await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve))
   const port = socket.address().port; await new Promise((resolve) => socket.close(resolve))
   const base = `http://127.0.0.1:${port}`
+  const device = '11111111-1111-4111-8111-111111111111'
+  const fetch = (url, opts = {}) => globalThis.fetch(url, { ...opts, headers: { 'X-Sonora-Device': device, ...opts.headers } })
   let server
   const start = async () => {
     server = spawn(process.execPath, ['index.js'], { cwd: new URL('..', import.meta.url), env: { ...process.env, PORT: String(port), MUSIC_DIR: path.join(dir, 'music'), YTDLP_PATH: bin }, stdio: 'ignore' })

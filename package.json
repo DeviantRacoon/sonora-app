@@ -2,12 +2,19 @@
   "name": "music-downloader",
   "private": true,
   "type": "module",
-  "workspaces": ["server", "web"],
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
-    "dev": "concurrently -n api,web \"bun run --filter server dev\" \"bun run --filter web dev\"",
-    "build": "bun run --filter web build",
-    "build:netlify": "bash netlify/prepare-binaries.sh && bun run build",
-    "start": "bun run --filter server start"
+    "dev": "concurrently --kill-others -n api,web \"bun run --filter server dev\" \"bun run --filter web dev\"",
+    "prod:frontend": "bun run --filter web build",
+    "prod:backend": "bun run --filter server start",
+    "build": "bun run prod:frontend",
+    "build:netlify": "bun run prod:frontend",
+    "start": "bun run prod:backend"
   },
-  "devDependencies": { "concurrently": "^9.0.0" }
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
 }

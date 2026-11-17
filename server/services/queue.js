@@ -37,8 +37,8 @@ const batchState = (batch) => {
   return { bid: batch.bid, title: batch.title, total: items.length, complete, failed, percent: Math.round(items.reduce((sum, j) => sum + (j.status === 'error' ? 100 : j.percent), 0) / items.length), ready: complete + failed === items.length, available: complete > 0 }
 }
 const publish = (job) => {
-  events.emit('job', { type: 'job', ...publicJob(job) })
-  events.emit('job', { type: 'batch', ...batchState(batches.get(job.bid)) })
+  events.emit('job', { type: 'job', ...publicJob(job) }, batches.get(job.bid).owner, batches.get(job.bid).playback)
+  events.emit('job', { type: 'batch', ...batchState(batches.get(job.bid)) }, batches.get(job.bid).owner, batches.get(job.bid).playback)
 }
 const set = (job, patch) => {
   Object.assign(job, patch)
@@ -50,11 +50,11 @@ const set = (job, patch) => {
   }
   publish(job)
 }
-export const snapshot = () => [...jobs.values()].map((job) => ({ type: 'job', ...publicJob(job) }))
-export const batchSnapshot = () => [...batches.values()].map((batch) => ({ type: 'batch', ...batchState(batch) }))
-export const getBatch = (bid) => {
+export const snapshot = (owner) => [...jobs.values()].filter(job => batches.get(job.bid).owner === owner && !batches.get(job.bid).playback).map((job) => ({ type: 'job', ...publicJob(job) }))
+export const batchSnapshot = (owner) => [...batches.values()].filter(batch => batch.owner === owner && !batch.playback).map((batch) => ({ type: 'batch', ...batchState(batch) }))
+export const getBatch = (bid, owner) => {
   const batch = batches.get(bid)
-  if (!batch) return null
+  if (!batch || batch.owner !== owner) return null
   return { ...batchState(batch), files: batch.jids.map((id) => jobs.get(id)).filter((j) => j.status === 'done').map((j) => ({ file: j.file, title: j.title })) }
 }
 export function holdFiles(files) {
@@ -62,10 +62,10 @@ export function holdFiles(files) {
   let released = false
   return () => { if (released) return; released = true; for (const { file } of files) { const count = activeFiles.get(file) - 1; if (count) activeFiles.set(file, count); else activeFiles.delete(file) } }
 }
-export function enqueue(items, album) {
+export function enqueue(items, album, owner, playback = false) {
   if ([...jobs.values()].filter((j) => j.status === 'queued' || j.status === 'downloading').length + items.length > MAX_PENDING) return null
   const bid = randomUUID()
-  const batch = { bid, title: album || (items.length === 1 ? items[0].title : 'Selección de canciones'), jids: [], completedAt: null }
+  const batch = { bid, owner, playback, title: album || (items.length === 1 ? items[0].title : 'Selección de canciones'), jids: [], completedAt: null }
   const added = items.map((it) => ({ jid: ++n, bid, id: it.id, title: it.title, album: album || null, status: 'queued', percent: 0, error: null }))
   batch.jids = added.map((j) => j.jid)
   db.exec('BEGIN')
@@ -101,9 +101,9 @@ function pump() {
       .finally(() => { running--; pump() })
   }
 }
-export function retry(jid) {
+export function retry(jid, owner) {
   const job = jobs.get(jid)
-  if (job?.status !== 'error' || [...jobs.values()].filter((j) => j.status === 'queued' || j.status === 'downloading').length >= MAX_PENDING) return false
+  if (job?.status !== 'error' || batches.get(job.bid).owner !== owner || [...jobs.values()].filter((j) => j.status === 'queued' || j.status === 'downloading').length >= MAX_PENDING) return false
   set(job, { status: 'queued', percent: 0, error: null })
   pump()
   return true
@@ -117,7 +117,7 @@ async function cleanup() {
     catch (e) { db.exec('ROLLBACK'); throw e }
     for (const id of batch.jids) jobs.delete(id)
     batches.delete(bid)
-    events.emit('job', { type: 'batch_removed', bid })
+    events.emit('job', { type: 'batch_removed', bid }, batch.owner, batch.playback)
   }
   const referenced = new Set([...jobs.values()].map((j) => j.file).filter(Boolean))
   for (const name of await readdir(cacheDir)) {
@@ -129,3 +129,10 @@ async function cleanup() {
 cleanup().catch((e) => console.error('Error limpiando descargas:', e.message))
 setInterval(() => cleanup().catch((e) => console.error('Error limpiando descargas:', e.message)), 60 * 60_000).unref()
 queueMicrotask(pump)
+
+export function preparePlayback(id, owner) {
+  const batch = [...batches.values()].find(b => b.owner === owner && b.playback && jobs.get(b.jids[0]).id === id)
+  if (!batch) return enqueue([{ id, title: id }], null, owner, true)
+  if (jobs.get(batch.jids[0]).status === 'error' && !retry(batch.jids[0], owner)) return null
+  return batchState(batch)
+}

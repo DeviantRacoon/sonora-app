@@ -3,3 +3,6 @@ music
 web/dist
 bin
 netlify/server/bin/
+.env
+.env.local
+web/.env.local

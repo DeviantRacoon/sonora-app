@@ -1,0 +1,205 @@
+/* A content-first listening space; artwork supplies the color. */
+:root{--bg:#111413;--surface:#191d1b;--surface-2:#232925;--surface-3:#303a33;--text:#f4f7f5;--muted:#adbab1;--faint:#9ba99f;--border:#354039;--accent:#a9e8c0;--accent-strong:#a9e8c0;--on-accent:#10251b;--surface-shadow:none;--control-shadow:none}
+:root[data-theme=light]{--bg:#f4f6f3;--surface:#fff;--surface-2:#e9eee8;--surface-3:#dce6dc;--text:#17291e;--muted:#526558;--faint:#526558;--border:#cbd6cc;--accent:#a9e8c0;--accent-strong:#246344;--on-accent:#10251b;--surface-shadow:none;--control-shadow:none}
+.app-shell .topbar{height:76px;padding:0 32px;box-shadow:none;background:var(--bg)}
+.app-shell .brand{font-family:'DM Sans',sans-serif;font-size:26px;font-weight:700;letter-spacing:-1px}
+.app-shell .workspace{max-width:1600px;padding:24px 32px 48px}
+.app-shell .music-navigation{display:flex;gap:8px;margin-bottom:20px}
+.music-navigation button{min-height:44px;display:flex;align-items:center;gap:8px;padding:0 18px;border:0;border-radius:24px;background:var(--surface-2);color:var(--text);font-size:14px;font-weight:700}
+.music-navigation button.active{background:var(--text);color:var(--bg)}
+.app-shell .search-area{max-width:760px;margin:0 0 32px}
+.app-shell .search-box{box-shadow:none;border:1px solid var(--border);border-radius:32px;background:var(--surface)}
+.app-shell .search-box input{font-size:16px}
+.app-shell .search-hint{display:none}
+.app-shell .content-layout{grid-template-columns:minmax(0,1fr);gap:32px}
+.app-shell .content-layout.has-preview{grid-template-columns:minmax(0,1fr) 280px}
+.app-shell .content-layout:not(.has-preview) .side-column{display:none}
+.home-heading{margin:0 0 32px}
+.home-heading h1{font-size:clamp(28px,3vw,42px);font-weight:700;line-height:1.15;letter-spacing:-1.3px;margin:10px 0}
+.home-heading p,.home-section-heading p{font-size:15px;line-height:1.6;color:var(--muted)}
+.music-home h2{font-family:'DM Sans',sans-serif;font-weight:700;font-size:24px;line-height:1.3;letter-spacing:-.6px}
+.home-section-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:32px 0 20px}
+.home-section-heading p{margin:6px 0 0}
+.home-section-heading .text-button{min-height:44px;font-size:14px;padding:0 12px}
+.recent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}
+.recent-grid button{display:flex;align-items:center;gap:14px;min-width:0;padding:0 16px 0 0;border:0;background:var(--surface-2);color:var(--text);border-radius:8px;overflow:hidden;text-align:left;transition:background .18s}
+.recent-grid button:hover{background:var(--surface-3)}
+.recent-grid strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.recent-art{width:64px;height:64px;flex:none;display:grid;place-items:center;background:#344e46;color:#e3f5e7}
+.recent-art-1{background:#594b69;color:#f3e8ff}.recent-art-2{background:#67543b;color:#ffedce}
+.recent-arrow{flex:none;color:var(--accent-strong)}
+.recommendation-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:16px}
+.music-card{min-width:0;padding:12px;background:var(--surface);border-radius:12px;transition:background .18s}
+.music-card:hover,.music-card:focus-within{background:var(--surface-2)}
+.music-cover{display:block;position:relative;width:100%;aspect-ratio:1;border:0;padding:0;border-radius:8px;overflow:hidden;background:var(--surface-3)}
+.music-cover img{width:100%;height:100%;object-fit:cover}
+.cover-play{position:absolute;bottom:12px;right:12px;display:grid;place-items:center;width:48px;height:48px;background:var(--accent);color:var(--on-accent);border-radius:50%;box-shadow:0 4px 16px #0005;transition:transform .18s}
+.music-cover:hover .cover-play{transform:scale(1.07)}
+.music-card h3{font-size:15px;font-weight:700;line-height:1.4;margin:14px 0 6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:42px}
+.card-artist,.card-reason{font-size:13px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.card-reason{margin-top:8px;font-size:12px;line-height:1.4}
+.card-actions{display:flex;align-items:center;justify-content:space-between;margin:8px -4px -4px}
+.app-shell .icon-button,.card-actions .icon-button,.preferences-dialog .icon-button{min-width:44px;min-height:44px;border:0;box-shadow:none;background:transparent;color:var(--muted);display:inline-grid;place-items:center;border-radius:50%}
+.card-actions .icon-button:hover,.app-shell .icon-button:hover{color:var(--text);background:var(--surface-2)}
+.card-actions button[aria-pressed=true]{color:var(--accent-strong);background:var(--surface-3)}
+.card-playing{position:absolute;top:10px;left:10px;right:10px;padding:6px 8px;border-radius:6px;color:#fff;background:#14291feb;font-size:12px}
+.discovery-welcome{display:grid;grid-template-columns:minmax(180px,.7fr) 1fr;align-items:center;gap:40px;background:var(--surface);padding:32px;border-radius:16px;overflow:hidden}
+.discovery-art{min-height:230px;background:#29483c;display:grid;place-items:center;aspect-ratio:1.15;border-radius:12px;overflow:hidden}
+.discovery-vinyl{display:grid;place-items:center;width:76%;aspect-ratio:1;border-radius:50%;background:repeating-radial-gradient(circle,#17221d 0,#17221d 3px,#314237 4px,#17221d 5px);box-shadow:12px 18px 24px #0004;transform:rotate(-15deg)}
+.discovery-vinyl span{width:30%;aspect-ratio:1;border-radius:50%;background:#c5d8ae;position:relative}
+.discovery-vinyl span:after{content:'';position:absolute;inset:43%;border-radius:50%;background:#17221d}
+.discovery-copy h3{font-size:clamp(24px,2.8vw,36px);font-weight:700;letter-spacing:-.8px;line-height:1.15;margin:14px 0}
+.discovery-copy p{max-width:45ch;color:var(--muted);font-size:15px;line-height:1.7;margin-bottom:24px}
+.app-shell .primary-button{box-shadow:none;border-radius:24px;min-height:44px;font-size:14px;white-space:normal}
+.app-shell .track-details strong{font-size:14px}.app-shell .track-details small{font-size:12px}
+.app-shell .side-caption{display:none}.app-shell .player-info h3{font-family:'DM Sans',sans-serif;font-weight:700}
+.app-shell .section-heading h2{font-family:'DM Sans',sans-serif;font-weight:700}
+.preferences-dialog{position:fixed;inset:0;margin:auto;width:min(520px,calc(100% - 32px));max-height:calc(100dvh - 48px);border:1px solid var(--border);border-radius:20px;padding:0;background:var(--surface);color:var(--text);box-shadow:0 24px 90px #0006;overflow:auto}
+.preferences-dialog::backdrop{background:#0009}
+.preferences-inner{padding:28px}
+.preferences-inner header{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.preferences-inner h2{font-size:26px;font-weight:700;margin-top:6px;letter-spacing:-.6px}
+.preferences-inner h3{font-size:16px;font-weight:700;margin-bottom:8px}
+.preferences-inner section{padding-top:24px;margin-top:24px;border-top:1px solid var(--border)}
+.preferences-inner p{font-size:14px;line-height:1.7;color:var(--muted)}
+.preference-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:52px;margin-top:16px;width:100%;font-size:14px;background:none;border:0;color:var(--text);text-align:left}
+.switch-track{display:flex;align-items:center;width:44px;height:26px;border:1px solid var(--muted);border-radius:20px;background:var(--surface-3);padding:3px;flex:none}
+.switch-track>span{display:block;width:18px;height:18px;border-radius:50%;background:var(--text)}
+.preference-toggle[aria-checked=true] .switch-track{background:var(--accent);border-color:var(--accent)}
+.preference-toggle[aria-checked=true] .switch-track>span{transform:translateX(17px);background:var(--on-accent)}
+.preferences-inner .text-button{min-height:44px;font-size:14px;padding:8px}
+.erase-confirm{padding:16px;margin-top:12px;background:var(--surface-2);border-radius:12px}
+.erase-confirm>div{display:flex;justify-content:flex-end;gap:12px;margin-top:12px;flex-wrap:wrap}
+.danger-button{border:1px solid var(--danger);border-radius:24px;padding:10px 16px;min-height:44px;font-size:14px;color:var(--danger);background:none}
+button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent-strong);outline-offset:4px}
+@media(max-width:900px){.app-shell .content-layout.has-preview{grid-template-columns:minmax(0,1fr) 240px}.recent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.discovery-welcome{gap:24px;padding:24px}.discovery-art{min-height:180px}}
+@media(max-width:650px){
+ .app-shell .topbar{padding:0 16px;height:68px;gap:8px}.app-shell .top-actions{gap:2px}.app-shell .brand{font-size:23px}
+ .app-shell .workspace{padding:20px 16px 32px}.app-shell .content-layout,.app-shell .content-layout.has-preview{display:flex;flex-direction:column;gap:24px}
+ .app-shell .search-area{margin:0 0 28px}.app-shell .search-box input{min-width:0;font-size:14px}.app-shell .search-box .primary-button{padding:12px}
+ .home-heading{margin-bottom:28px}.home-heading h1{font-size:29px;letter-spacing:-.8px}.home-heading p{font-size:14px}
+ .music-home h2{font-size:21px}.recent-grid{gap:8px}.recent-art{width:44px;height:60px}.recent-grid button{gap:8px;padding-right:8px}.recent-grid strong{font-size:13px}.recent-arrow{display:none}
+ .recommendation-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.music-card{padding:8px}.music-card h3{font-size:14px}.card-actions .icon-button{min-width:40px;min-height:44px}
+ .discovery-welcome{grid-template-columns:1fr;gap:24px;padding:24px}.discovery-art{min-height:0;aspect-ratio:1.7}.discovery-vinyl{width:58%}.discovery-copy .primary-button{width:100%}
+ .home-section-heading{gap:8px}.home-section-heading p{font-size:13px}.home-section-heading .text-button{font-size:13px;padding:0 4px}
+ .preferences-inner{padding:24px}.preferences-dialog{max-height:calc(100dvh - 32px)}
+}
+body{background:var(--bg)}
+.recommendation-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media(max-width:1200px){.recommendation-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:900px){.recommendation-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.has-preview .recommendation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.recommendation-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.card-actions{flex-wrap:wrap}
+.card-actions .icon-button{min-width:44px;min-height:44px}
+
+/* Keep the first recommendations above the fold; recent searches follow the music. */
+.app-shell .workspace{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:16px;row-gap:20px;padding-top:20px}
+.app-shell .workspace > :not(.music-navigation):not(.search-area){grid-column:1/-1}
+.app-shell .music-navigation{grid-column:1;grid-row:1;align-self:center;margin:0}
+.app-shell .search-area{grid-column:2;grid-row:1;width:100%;margin:0;align-self:center}
+.home-heading{margin:0 0 12px}
+.home-heading h1{font-size:clamp(26px,2.5vw,34px);line-height:1.2;margin:0}
+.home-section-heading{margin:0 0 16px}
+.recent-section{margin-top:28px}
+.recent-grid{margin-top:12px}
+.discovery-welcome{padding:24px;gap:24px;grid-template-columns:minmax(120px,.35fr) 1fr}
+.discovery-art{min-height:0;max-height:200px}
+.discovery-copy h3{font-size:clamp(23px,2.3vw,30px);margin:10px 0}
+.discovery-copy p{margin-bottom:16px}
+@media(max-width:650px){
+ .app-shell .workspace{column-gap:10px;row-gap:16px;padding-top:12px}
+ .app-shell .music-navigation button{width:44px;padding:0;justify-content:center}
+ .music-navigation button > span{display:none}
+ .app-shell .search-area{margin:0}
+ .app-shell .search-box{padding-left:10px;gap:6px;min-height:52px}
+ .app-shell .search-box .search-icon{display:none}
+ .app-shell .search-box .primary-button{padding:10px;gap:4px;font-size:13px}
+ .home-heading{margin-bottom:12px}.home-heading h1{font-size:26px}
+ .home-section-heading{margin:0 0 12px}.home-section-heading p{margin-top:4px}
+ .music-card h3{margin-top:10px}.card-reason{margin-top:4px}.card-actions{margin-top:4px}
+ .discovery-welcome{grid-template-columns:1fr;padding:20px;gap:0}
+ .discovery-art{display:none}
+ .discovery-copy p{font-size:14px}
+}
+@media(max-width:360px){
+ .recommendation-grid{grid-template-columns:minmax(0,1fr)}
+ .music-card{display:grid;grid-template-columns:76px minmax(0,1fr);column-gap:12px;align-items:start;padding:12px}
+ .music-cover{grid-column:1;grid-row:1/4}
+ .cover-play{width:44px;height:44px;right:4px;bottom:4px}
+ .music-card h3{grid-column:2;margin:0 0 4px;min-height:0}
+ .card-artist,.card-reason{grid-column:2}
+ .card-actions{grid-column:1/-1;margin:8px 0 0;justify-content:flex-end;gap:8px}
+}
+
+/* Shared motion: a soft lift with a short, quieter return. */
+:root{--motion-enter:320ms;--motion-exit:220ms;--motion-ease:cubic-bezier(.22,1,.36,1)}
+.preferences-dialog{transform-origin:50% 60%;box-shadow:inset 0 2px 2px #ffffff18,inset 0 -3px 8px #00000012,0 28px 80px #0005}
+.preferences-dialog[open]{animation:preferences-enter var(--motion-enter) var(--motion-ease) both}
+.preferences-dialog[open]::backdrop{animation:scrim-enter var(--motion-enter) ease both}
+.preferences-dialog[open].is-closing{animation:preferences-exit var(--motion-exit) ease-in both;pointer-events:none}
+.preferences-dialog[open].is-closing::backdrop{animation:scrim-exit var(--motion-exit) ease both}
+@keyframes preferences-enter{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes preferences-exit{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(10px) scale(.98)}}
+@keyframes scrim-enter{from{background:#0000}to{background:#0009}}
+@keyframes scrim-exit{from{background:#0009}to{background:#0000}}
+.view-enter{animation:screen-enter var(--motion-enter) var(--motion-ease) both}
+@keyframes screen-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.erase-confirm,.preferences-inner .notice,.notice,.queue-empty{animation:screen-enter 220ms var(--motion-ease) both}
+.switch-track,.switch-track>span{transition:transform 220ms var(--motion-ease),background-color 220ms ease,border-color 220ms ease}
+.music-navigation button,.text-button,.music-card,.recent-grid button{transition:background-color 200ms ease,color 200ms ease,box-shadow 200ms ease}
+.drawer{transition:transform var(--motion-enter) var(--motion-ease)}
+.drawer-scrim{transition:opacity var(--motion-enter) ease}
+:root{view-transition-name:none}
+.results{view-transition-name:music-content}
+::view-transition-group(music-content){animation-duration:280ms;animation-timing-function:var(--motion-ease)}
+::view-transition-old(music-content){animation:snapshot-out 180ms ease both}
+::view-transition-new(music-content){animation:screen-enter 280ms var(--motion-ease) both}
+@keyframes snapshot-out{to{opacity:0;transform:translateY(-4px)}}
+@media(prefers-reduced-motion:reduce){
+ .preferences-dialog[open],.preferences-dialog[open]::backdrop,.preferences-dialog[open].is-closing,.preferences-dialog[open].is-closing::backdrop,.view-enter,.erase-confirm,.notice,.queue-empty{animation-duration:.01ms;transform:none}
+ .switch-track,.switch-track>span,.drawer,.drawer-scrim{transition-duration:.01ms}
+ ::view-transition-group(music-content),::view-transition-old(music-content),::view-transition-new(music-content){animation:none}
+}
+
+/* Keep the loader in view even when opening a playlist from a long results list. */
+.content-layout.is-searching .results-area{min-height:340px}
+@media(min-width:651px){.content-layout.is-searching .results{display:none}}
+.content-layout.is-searching .search-loading{
+ position:sticky;top:88px;bottom:auto;
+ height:min(340px,calc(100dvh - 120px));min-height:220px;
+ margin-bottom:calc(-1 * min(340px,calc(100dvh - 120px)));
+}
+@media(max-width:650px){.content-layout.is-searching .search-loading{top:80px}}
+
+/* Desktop keeps the original compact actions; touch adaptations stay mobile-only. */
+.track-preferences{display:contents}
+.mobile-preference,.player-preferences,.player-timeline{display:none}
+.player-error{color:var(--danger)!important;margin-top:12px}
+@media(max-width:650px){
+  .app-shell .search-box input{font-size:16px}
+  .track-row{display:grid;grid-template-columns:32px 56px minmax(0,1fr) 44px;column-gap:8px;row-gap:4px;padding:12px 0}
+  .track-check{grid-column:1;grid-row:1}.track-art{grid-column:2;grid-row:1}.track-details{grid-column:3;grid-row:1;width:auto}
+  .track-download{grid-column:4;grid-row:1}.duration{display:none}
+  .track-preferences{display:flex;gap:8px;grid-column:2/-1;grid-row:2;flex-wrap:wrap}
+  .track-preferences:empty,.desktop-preference{display:none}
+  .mobile-preference{display:inline-flex;align-items:center;gap:8px}
+  .track-preference,.preference-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:8px 10px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-size:13px;line-height:1.3}
+  .track-preference:hover,.preference-button:hover{background:var(--surface-2);color:var(--text);text-decoration:none}
+  .track-preference[aria-pressed=true],.preference-button[aria-pressed=true]{color:var(--accent-strong);background:var(--surface-2)}
+  .player-preferences{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:16px}
+  .player-preferences .preference-button{flex:1;padding:8px;font-size:12px}
+  .player-timeline{display:block;margin-top:16px}
+  .player-timeline input{display:block;width:100%;height:44px;accent-color:var(--accent-strong);cursor:pointer}
+  .player-timeline>div{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+  .card-actions{gap:8px;justify-content:flex-start;margin:8px 0 0}
+  .app-shell .content-layout.has-preview .player-card{grid-template-columns:80px minmax(0,1fr)}
+  .app-shell .content-layout.has-preview .player-placeholder{min-height:100px}
+  .app-shell .content-layout.has-preview .record{width:70px;height:70px}
+  .side-column:not(.player-expanded) .player-preferences,.side-column:not(.player-expanded) .player-timeline{display:none}
+  .app-shell .content-layout.has-preview .player-expanded .player-card{display:flex}
+  .app-shell .content-layout.has-preview .player-expanded .player-info{padding-top:12px}
+  .app-shell .content-layout.has-preview .player-expanded .player-controls{margin-top:12px;gap:24px}
+  .app-shell .content-layout.has-preview .player-expanded .record{width:min(62vw,260px,28dvh);height:min(62vw,260px,28dvh)}
+  .app-shell .content-layout.has-preview .player-expanded .player-placeholder{min-height:0}
+  .app-shell .topbar{padding-top:env(safe-area-inset-top);height:calc(68px + env(safe-area-inset-top))}
+}
