@@ -1,6 +1,12 @@
-node_modules
+**/node_modules
+web/dist
 .git
 .env
+.env.*
 music
-web
 .agents
+.tunnel
+bin
+server/test
+web/test
+.certs

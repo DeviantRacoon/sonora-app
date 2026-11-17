@@ -7,3 +7,4 @@ netlify/server/bin/
 .env.local
 web/.env.local
 .tunnel/
+.certs/

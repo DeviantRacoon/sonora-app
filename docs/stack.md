@@ -9,7 +9,7 @@
 - **Procesamiento:** yt-dlp y FFmpeg para MP3; `yazl` para ZIP; MusicBrainz y ListenBrainz para descubrimiento musical.
 - **Herramientas:** Bun para los workspaces, `concurrently` para procesos locales, `node:test` para pruebas y Docker Compose para PostgreSQL y backend locales.
 
-El workspace contiene `web/` y `server/`. En desarrollo Vite redirige `/api` a `127.0.0.1:3001`. En producción el frontend puede publicarse por separado o servirse desde Express en `web/dist`. El Dockerfile del backend copia `server/`; no incluye por sí mismo el frontend compilado.
+El workspace contiene `web/` y `server/`. En desarrollo Vite redirige `/api` a `127.0.0.1:3001`. En producción el frontend puede publicarse por separado o servirse desde Express en `web/dist`. El Dockerfile es multi-etapa: compila el frontend con `VITE_API_BASE_URL` vacío y lo copia a `web/dist`, de modo que la imagen sirve API e interfaz en un mismo origen (Express). Compose añade el perfil opcional `tunnel` con `cloudflared`.
 
 ## Variables de entorno
 

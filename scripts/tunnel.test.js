@@ -13,7 +13,7 @@ async function fixture(t, body) {
   await mkdir(join(root, 'scripts'))
   await copyFile(new URL('./tunnel.js', import.meta.url), join(root, 'scripts/tunnel.mjs'))
   await writeFile(join(root, 'bun'), `#!/usr/bin/env node\n${body}`, { mode: 0o700 })
-  const run = (...args) => exec(process.execPath, [join(root, 'scripts/tunnel.mjs'), ...args], { env: { ...process.env, PATH: `${root}:${process.env.PATH}` }, timeout: 6000 })
+  const run = (...args) => exec(process.execPath, [join(root, 'scripts/tunnel.mjs'), ...args], { env: { ...process.env, SONORA_SKIP_PREFLIGHT: '1', PATH: `${root}:${process.env.PATH}` }, timeout: 6000 })
   t.after(async () => { await run('--stop'); await rm(root, { recursive: true, force: true }) })
   return { root, run }
 }
@@ -41,4 +41,9 @@ test('informa fallos de arranque y elimina el PID obsoleto', async t => {
   await assert.rejects(run(), error => error.code === 1 && /No se pudo iniciar el túnel/.test(error.stderr))
   assert.match(await readFile(join(root, '.tunnel/tunnel.log'), 'utf8'), /build failed/)
   await assert.rejects(readFile(join(root, '.tunnel/tunnel.pid')), { code: 'ENOENT' })
+})
+
+test('sugiere la causa probable cuando el arranque falla', async t => {
+  const { run } = await fixture(t, `console.error('tls: failed to verify certificate: x509: certificate signed by unknown authority'); process.exit(1)`)
+  await assert.rejects(run(), error => /Posibles causas/.test(error.stderr) && /inspecciona TLS/.test(error.stderr))
 })

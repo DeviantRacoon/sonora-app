@@ -59,6 +59,20 @@ Si reinicias el Quick Tunnel y cambia el dominio, el navegador trata la URL nuev
 
 El Quick Tunnel cambia de URL al reiniciar. Para una URL estable crea un túnel con nombre en una cuenta de Cloudflare con un dominio propio (consulta la [guía oficial](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/)), apunta su ingress a `http://127.0.0.1:3001` y sustituye en el script `tunnel:run` de `package.json` el comando `cloudflared tunnel --url …` por `cloudflared tunnel run <nombre>`. Los túneles con nombre no tienen las restricciones de los Quick Tunnels, aunque la app seguirá usando consultas periódicas en lugar de SSE solo en `trycloudflare.com`.
 
+## Diagnóstico de red y firewall
+
+`bun run tunnel` ejecuta antes de arrancar unas verificaciones y marca con ✗ lo que falla; `bun run tunnel:check` las ejecuta solas, sin iniciar nada:
+
+| Verificación | Si falla |
+| --- | --- |
+| `bin/cloudflared` ejecutable | Instálalo (ver arriba). |
+| Puerto local 3001 libre | Hay otro backend (`bun run dev` o `docker compose up backend`). |
+| DNS `api.trycloudflare.com` | DNS, VPN o filtrado DNS. |
+| TCP 443 a `api.trycloudflare.com` | Firewall o proxy bloquea HTTPS saliente. |
+| TCP 7844 a `region1.v2.argotunnel.com` | Firewall bloquea el puerto que usa cloudflared; ábrelo (TCP y UDP 7844). |
+
+"Tiempo agotado" suele indicar un firewall que descarta paquetes; "conexión rechazada", uno que los rechaza. Si el túnel no conecta en 30 s o el proceso termina, el script analiza el log y lista posibles causas (certificado TLS de un proxy, DNS, tiempo agotado, puerto ocupado, PostgreSQL). No comprueba UDP: si TCP 7844 pasa pero el túnel va lento, cloudflared reintenta por HTTP/2.
+
 ## Detener y comprobar
 
 `bun run tunnel:stop` detiene los procesos en segundo plano. `Ctrl+C` al consultar el log solo detiene su lectura. La salida se guarda en `.tunnel/tunnel.log` y se reemplaza en cada nuevo arranque. El PID se guarda en `.tunnel/tunnel.pid`; ambos archivos están excluidos de Git. PostgreSQL continúa en Docker; puedes detenerlo con `docker compose stop db`. No elimines los volúmenes para detener servicios.

@@ -8,7 +8,7 @@ Requisitos: Node.js 22.13 o posterior, Bun, yt-dlp, FFmpeg y Docker Compose si n
 
 ```sh
 bun install
-cp .env.example .env
+cp -n .env.example .env   # -n: no sobrescribe un .env existente
 ```
 
 Edita `.env`: cambia `POSTGRES_PASSWORD` y la misma contraseña dentro de `DATABASE_URL`. Usa una contraseña segura para URL o codifícala en la URL de conexión. Deja `VITE_API_BASE_URL` vacío y conserva el puerto 3001 del backend para el proxy de Vite.

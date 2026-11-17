@@ -41,7 +41,7 @@ Sin PostgreSQL, búsqueda, reproducción y descargas funcionan; la personalizaci
 
 ```sh
 bun install
-cp .env.example .env        # cambia la contraseña (en POSTGRES_PASSWORD y DATABASE_URL) y MUSIC_USER_AGENT
+cp -n .env.example .env     # solo la primera vez (-n no sobrescribe); cambia la contraseña (en POSTGRES_PASSWORD y DATABASE_URL) y MUSIC_USER_AGENT
 docker compose up -d --wait db
 bun run dev
 ```
@@ -65,6 +65,22 @@ bun run tunnel:stop    # detiene frontend, API y túnel (PostgreSQL sigue en Doc
 
 Instalación de `cloudflared`, dominio fijo, verificación y resolución de problemas: [guía del túnel](docs/tunnel.md).
 
+## Todo en Docker (imagen + túnel)
+
+La imagen incluye la API y el frontend compilado (mismo origen), así que se puede compartir sin Bun ni Node en el host:
+
+```sh
+docker compose up -d --build                      # API + frontend en http://localhost:3001, con PostgreSQL
+mkdir -p .certs && cp /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem .certs/ca-bundle.pem   # una vez (ver nota)
+docker compose --profile tunnel up -d             # añade cloudflared
+docker compose logs tunnel | grep -o 'https://[a-z-]*\.trycloudflare\.com' | grep -v '//api\.'   # URL pública
+docker compose --profile tunnel stop tunnel       # cerrar el túnel (la URL cambia al reiniciarlo)
+```
+
+- No lo combines con `bun run dev` ni `bun run tunnel`: todos usan el puerto 3001.
+- Nota `.certs`: `cloudflared` en contenedor necesita las CAs del host si tu red inspecciona TLS (error `x509: certificate signed by unknown authority`). En Debian/Ubuntu copia `/etc/ssl/certs/ca-certificates.crt`. Si no lo necesitas, un archivo cualquiera con las CAs públicas basta.
+- Tras cambiar código, repite `docker compose up -d --build` (no hay recarga en caliente).
+
 ## Despliegue
 
 Producción usa **Netlify** (frontend estático) y **Railway** (API con Dockerfile + PostgreSQL + volumen `/data/music`).
@@ -81,7 +97,8 @@ Pasos completos y verificación: [guía de despliegue](docs/despliegue.md).
 | Comando (desde la raíz) | Uso |
 | --- | --- |
 | `bun run dev` | Frontend y backend en desarrollo |
-| `bun run tunnel` / `tunnel:stop` | Iniciar / detener el túnel de Cloudflare |
+| `bun run tunnel` / `tunnel:stop` | Iniciar / detener el túnel de Cloudflare (verifica antes red y firewall) |
+| `bun run tunnel:check` | Solo diagnosticar red, DNS, firewall y puerto 3001 |
 | `bun run prod:frontend` (`build`, `build:netlify`) | Compilar el frontend en `web/dist` |
 | `bun run prod:backend` (`start`) | Iniciar solo la API con `NODE_ENV=production` |
 | `docker compose up --build` | Backend + PostgreSQL en contenedores (no combinar con `dev`: ambos usan el 3001) |
