@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { accessSync, constants } from 'node:fs'
@@ -12,6 +12,12 @@ const directory = resolve(root, '.tunnel')
 const log = resolve(directory, 'tunnel.log')
 const pidFile = resolve(directory, 'tunnel.pid')
 mkdirSync(directory, { recursive: true })
+
+const cloudflaredBinary = () => {
+  const exe = resolve(root, 'bin/cloudflared.exe')
+  if (existsSync(exe)) return exe
+  return resolve(root, 'bin/cloudflared')
+}
 
 const alive = pid => {
   if (!Number.isInteger(pid) || pid <= 1) return false
@@ -35,7 +41,15 @@ const tcp = (host, port) => new Promise(done => {
   socket.once('error', error => done(error.code === 'ECONNREFUSED' ? 'conexión rechazada (firewall o red que rechaza el puerto)' : error.message))
 })
 const checks = [
-  ['bin/cloudflared ejecutable', async () => { try { accessSync(resolve(root, 'bin/cloudflared'), constants.X_OK); return null } catch { return 'no existe o no es ejecutable; consulta docs/tunnel.md (Instalar cloudflared)' } }],
+  ['bin/cloudflared ejecutable', async () => {
+    try {
+      const bin = cloudflaredBinary()
+      accessSync(bin, process.platform === 'win32' ? constants.F_OK : constants.X_OK)
+      return null
+    } catch {
+      return 'no existe o no es ejecutable; consulta docs/tunnel.md (Instalar cloudflared)'
+    }
+  }],
   ['puerto local 3001 libre', () => new Promise(done => {
     const server = createServer().once('error', error => done(error.code === 'EADDRINUSE' ? 'ocupado: detén `bun run dev`, el backend o `docker compose up backend`' : error.message))
     server.listen(3001, '127.0.0.1', () => server.close(() => done(null)))
@@ -66,11 +80,22 @@ const diagnose = () => {
   if (found.length) console.error(`Posibles causas:\n${found.map(hint => `  - ${hint}`).join('\n')}`)
 }
 
+const stopProcess = pid => {
+  if (!alive(pid)) return
+  if (process.platform === 'win32') {
+    try { spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' }) } catch {}
+  } else {
+    try { process.kill(-pid, 'SIGTERM') } catch {
+      try { process.kill(pid, 'SIGTERM') } catch {}
+    }
+  }
+}
+
 try {
   if (process.argv.includes('--check')) { await preflight(); process.exit(0) }
   const previous = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8').trim()) : 0
   if (process.argv.includes('--stop')) {
-    if (alive(previous)) process.kill(-previous, 'SIGTERM')
+    stopProcess(previous)
     rmSync(pidFile, { force: true })
     console.log('Sonora · túnel detenido. PostgreSQL continúa en Docker.')
   } else if (alive(previous)) {
@@ -80,7 +105,18 @@ try {
     const fd = openSync(log, 'w', 0o600)
     let child
     try {
-      child = spawn('bun', ['run', 'tunnel:run'], { cwd: root, detached: true, stdio: ['ignore', fd, fd], env: { ...process.env, NO_COLOR: '1' } })
+      child = spawn('bun', ['run', 'tunnel:run'], {
+        cwd: root,
+        detached: true,
+        stdio: ['ignore', fd, fd],
+        env: {
+          ...process.env,
+          NO_COLOR: '1',
+          VITE_API_BASE_URL: '',
+          HOST: '127.0.0.1',
+          PORT: '3001'
+        }
+      })
       await once(child, 'spawn')
     } finally { closeSync(fd) }
     writeFileSync(pidFile, String(child.pid), { mode: 0o600 })

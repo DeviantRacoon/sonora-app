@@ -2,9 +2,21 @@
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { existsSync } from 'node:fs'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 
-const BIN = process.env.YTDLP_PATH || 'yt-dlp'
+const binDir = path.resolve(import.meta.dirname, '../../bin')
+const localBin = [
+  path.join(binDir, 'yt-dlp.exe'),
+  path.join(binDir, 'yt-dlp'),
+].find(existsSync)
+const BIN = process.env.YTDLP_PATH || localBin || 'yt-dlp'
+
+const localFfmpeg = [
+  path.join(binDir, 'ffmpeg.exe'),
+  path.join(binDir, 'ffmpeg'),
+].find(existsSync)
+const ffmpegArgs = localFfmpeg ? ['--ffmpeg-location', binDir] : []
 const jsRuntime = process.env.YTDLP_JS_RUNTIME ? ['--js-runtimes', `node:${process.execPath}`] : []
 export const MUSIC_DIR = process.env.MUSIC_DIR || fileURLToPath(new URL('../../music', import.meta.url))
 export const isVideoId = (s) => typeof s === 'string' && /^[\w-]{11}$/.test(s)
@@ -82,7 +94,7 @@ export async function playlist(id) {
 
 export async function download({ id, directory }, onProgress) {
   await mkdir(directory, { recursive: true })
-  const p = spawn(BIN, [...jsRuntime, '-x', '--audio-format', 'mp3', '--audio-quality', '320K', '--embed-thumbnail', '--embed-metadata', '--no-playlist', '--newline', '--progress', '--progress-template', 'PCT:%(progress._percent_str)s', '--print', 'after_move:FILE:%(filepath)s', '-o', path.join(directory, '%(title)s.%(ext)s'), `https://www.youtube.com/watch?v=${id}`])
+  const p = spawn(BIN, [...jsRuntime, ...ffmpegArgs, '-x', '--audio-format', 'mp3', '--audio-quality', '320K', '--embed-thumbnail', '--embed-metadata', '--no-playlist', '--newline', '--progress', '--progress-template', 'PCT:%(progress._percent_str)s', '--print', 'after_move:FILE:%(filepath)s', '-o', path.join(directory, '%(title)s.%(ext)s'), `https://www.youtube.com/watch?v=${id}`])
   let out = '', file = ''
   await processResult(p, 30 * 60_000, (d) => {
     out += d

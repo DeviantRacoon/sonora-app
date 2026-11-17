@@ -4,7 +4,8 @@ services:
     environment:
       POSTGRES_DB: sonora
       POSTGRES_USER: sonora
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sonora_password}
+      POSTGRES_HOST_AUTH_METHOD: "trust"
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -19,7 +20,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      DATABASE_URL: postgres://sonora:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD}@db:5432/sonora
+      DATABASE_URL: postgres://sonora:${POSTGRES_PASSWORD:-sonora_password}@db:5432/sonora
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173}
       MUSIC_USER_AGENT: ${MUSIC_USER_AGENT:-Sonora/1.0 (local development)}
       SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
@@ -30,23 +31,18 @@ services:
         condition: service_healthy
     volumes:
       - music:/data/music
-      - ./.certs/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro,z
+      # - ./.certs/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro,z
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
   tunnel:
-    # Quick Tunnel opcional: docker compose --profile tunnel up
-    profiles: ["tunnel"]
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate --url http://backend:3001
-    volumes:
-      # Copia local de las CAs del host (ver README); necesaria tras proxies que inspeccionan TLS. :z por SELinux.
-      - ./.certs/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro,z
-    depends_on:
-      backend:
-        condition: service_healthy
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://host.docker.internal:3001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 volumes:
   profiles:
   music:

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { access } from 'node:fs/promises'
 import { ZipFile } from 'yazl'
 import { search, playlist, isVideoId, isPlaylistId, safeName } from './services/ytdlp.js'
-import { enqueue, retry, snapshot, batchSnapshot, getBatch, holdFiles, events, preparePlayback } from './services/queue.js'
+import { enqueue, retry, removeBatch, purgeCompleted, snapshot, batchSnapshot, getBatch, holdFiles, events, preparePlayback } from './services/queue.js'
 import { cached } from './services/cache.js'
 
 import { profileRoutes } from './services/profiles.js'
@@ -66,15 +66,38 @@ app.get('/api/downloads/batches/:bid/file', wrap(async (req, res) => {
   res.once('close', release)
   res.once('finish', release)
   try { await Promise.all(batch.files.map(({ file }) => access(file))) } catch (e) { release(); throw e }
-  if (batch.total === 1) return res.download(batch.files[0].file, `${safeName(batch.files[0].title)}.mp3`)
+
+  const autoClean = () => {
+    setTimeout(() => {
+      removeBatch(req.params.bid, req.device).catch(() => {})
+    }, 1500)
+  }
+  res.once('finish', autoClean)
+
+  if (batch.total === 1) {
+    return res.download(batch.files[0].file, `${safeName(batch.files[0].title)}.mp3`, (err) => {
+      if (err) res.off('finish', autoClean)
+    })
+  }
   res.attachment(`${safeName(batch.title)}.zip`)
   const archive = new ZipFile()
-  archive.on('error', (error) => res.destroy(error))
-  archive.outputStream.on('error', (error) => res.destroy(error))
+  archive.on('error', (error) => { res.off('finish', autoClean); res.destroy(error) })
+  archive.outputStream.on('error', (error) => { res.off('finish', autoClean); res.destroy(error) })
   res.on('close', () => archive.outputStream.destroy())
   archive.outputStream.pipe(res)
   batch.files.forEach(({ file, title }, index) => archive.addFile(file, `${String(index + 1).padStart(2, '0')} - ${safeName(title)}.mp3`, { compress: false }))
   archive.end()
+}))
+
+app.post('/api/downloads/purge', wrap(async (req, res) => {
+  await purgeCompleted(req.device)
+  res.json({ ok: true })
+}))
+
+app.delete('/api/downloads/batches/:bid', wrap(async (req, res) => {
+  const ok = await removeBatch(req.params.bid, req.device)
+  if (!ok) return res.status(404).json({ error: 'Descarga no encontrada o en uso' })
+  res.json({ ok: true })
 }))
 
 app.post('/api/downloads/:jid/retry', (req, res) => res.json({ ok: retry(Number(req.params.jid), req.device) }))

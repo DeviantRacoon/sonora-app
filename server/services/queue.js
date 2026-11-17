@@ -1,22 +1,49 @@
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
-import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, existsSync, rmSync } from 'node:fs'
+import { mkdirSync, existsSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises'
 import path from 'node:path'
 import { download, MUSIC_DIR } from './ytdlp.js'
 
-const CONCURRENCY = 2, MAX_PENDING = 500, RETENTION = 7 * 24 * 60 * 60_000
+const CONCURRENCY = 2, MAX_PENDING = 500
+const RETENTION_HOURS = Number(process.env.CACHE_RETENTION_HOURS || 24)
+const RETENTION = RETENTION_HOURS * 60 * 60_000
 const root = path.resolve(MUSIC_DIR, '.sonora'), cacheDir = path.join(root, 'cache'), tempDir = path.join(root, 'tmp')
 mkdirSync(cacheDir, { recursive: true })
 rmSync(tempDir, { recursive: true, force: true })
 mkdirSync(tempDir, { recursive: true })
-const db = new DatabaseSync(path.join(root, 'queue.sqlite'))
-db.exec('PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS batches (id TEXT PRIMARY KEY, data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, data TEXT NOT NULL)')
-const saveJob = db.prepare('INSERT OR REPLACE INTO jobs VALUES (?, ?)')
-const saveBatch = db.prepare('INSERT OR REPLACE INTO batches VALUES (?, ?)')
-const jobs = new Map(db.prepare('SELECT data FROM jobs').all().map(({ data }) => { const j = JSON.parse(data); return [j.jid, j] }))
-const batches = new Map(db.prepare('SELECT data FROM batches').all().map(({ data }) => { const b = JSON.parse(data); return [b.bid, b] }))
+
+let db, saveJob, saveBatch, deleteJob, deleteBatch, initialJobs = [], initialBatches = []
+try {
+  const { DatabaseSync } = await import('node:sqlite')
+  db = new DatabaseSync(path.join(root, 'queue.sqlite'))
+  db.exec('PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS batches (id TEXT PRIMARY KEY, data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, data TEXT NOT NULL)')
+  saveJob = db.prepare('INSERT OR REPLACE INTO jobs VALUES (?, ?)')
+  saveBatch = db.prepare('INSERT OR REPLACE INTO batches VALUES (?, ?)')
+  deleteJob = db.prepare('DELETE FROM jobs WHERE id = ?')
+  deleteBatch = db.prepare('DELETE FROM batches WHERE id = ?')
+  initialJobs = db.prepare('SELECT data FROM jobs').all().map(({ data }) => JSON.parse(data))
+  initialBatches = db.prepare('SELECT data FROM batches').all().map(({ data }) => JSON.parse(data))
+} catch {
+  const storeFile = path.join(root, 'queue.json')
+  let store = { jobs: {}, batches: {} }
+  try {
+    if (existsSync(storeFile)) store = JSON.parse(readFileSync(storeFile, 'utf8'))
+  } catch {}
+  const persist = () => {
+    try { writeFileSync(storeFile, JSON.stringify(store, null, 2)) } catch {}
+  }
+  initialJobs = Object.values(store.jobs || {})
+  initialBatches = Object.values(store.batches || {})
+  saveJob = { run: (id, data) => { store.jobs[id] = JSON.parse(data); persist() } }
+  saveBatch = { run: (id, data) => { store.batches[id] = JSON.parse(data); persist() } }
+  deleteJob = { run: (id) => { delete store.jobs[id]; persist() } }
+  deleteBatch = { run: (id) => { delete store.batches[id]; persist() } }
+  db = { exec: () => {} }
+}
+
+const jobs = new Map(initialJobs.map((j) => [j.jid, j]))
+const batches = new Map(initialBatches.map((b) => [b.bid, b]))
 let n = Math.max(0, ...jobs.keys()), running = 0
 export const events = new EventEmitter()
 const activeFiles = new Map(), downloads = new Map()
@@ -113,7 +140,7 @@ async function cleanup() {
   for (const [bid, batch] of batches) {
     if (!batch.completedAt || now - batch.completedAt < RETENTION || batch.jids.some((id) => activeFiles.has(jobs.get(id)?.file))) continue
     db.exec('BEGIN')
-    try { for (const id of batch.jids) db.prepare('DELETE FROM jobs WHERE id = ?').run(id); db.prepare('DELETE FROM batches WHERE id = ?').run(bid); db.exec('COMMIT') }
+    try { for (const id of batch.jids) deleteJob.run(id); deleteBatch.run(bid); db.exec('COMMIT') }
     catch (e) { db.exec('ROLLBACK'); throw e }
     for (const id of batch.jids) jobs.delete(id)
     batches.delete(bid)
@@ -135,4 +162,52 @@ export function preparePlayback(id, owner) {
   if (!batch) return enqueue([{ id, title: id }], null, owner, true)
   if (jobs.get(batch.jids[0]).status === 'error' && !retry(batch.jids[0], owner)) return null
   return batchState(batch)
+}
+
+export async function removeBatch(bid, owner) {
+  const batch = batches.get(bid)
+  if (!batch || batch.owner !== owner) return false
+  if (batch.jids.some((id) => activeFiles.has(jobs.get(id)?.file))) return false
+  db.exec('BEGIN')
+  try {
+    for (const id of batch.jids) deleteJob.run(id)
+    deleteBatch.run(bid)
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+  const filesToDelete = []
+  for (const id of batch.jids) {
+    const job = jobs.get(id)
+    if (job?.file) filesToDelete.push(job.file)
+    jobs.delete(id)
+  }
+  batches.delete(bid)
+  events.emit('job', { type: 'batch_removed', bid }, batch.owner, batch.playback)
+
+  const referenced = new Set([...jobs.values()].map((j) => j.file).filter(Boolean))
+  for (const file of filesToDelete) {
+    if (!referenced.has(file) && !activeFiles.has(file)) {
+      try { await rm(file, { force: true }) } catch {}
+    }
+  }
+  return true
+}
+
+export async function purgeCompleted(owner) {
+  const toRemove = [...batches.values()].filter(b => (!owner || b.owner === owner) && batchState(b).ready)
+  for (const b of toRemove) {
+    await removeBatch(b.bid, b.owner)
+  }
+  const referenced = new Set([...jobs.values()].map((j) => j.file).filter(Boolean))
+  try {
+    for (const name of await readdir(cacheDir)) {
+      const file = path.join(cacheDir, name)
+      if (!referenced.has(file) && !activeFiles.has(file)) {
+        await rm(file, { force: true }).catch(() => {})
+      }
+    }
+  } catch {}
+  return true
 }

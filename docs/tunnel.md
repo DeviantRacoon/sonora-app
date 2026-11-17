@@ -4,7 +4,7 @@ El túnel permite abrir Sonora desde un celular u otro equipo mediante una URL H
 
 ## Instalar cloudflared
 
-El script espera el binario en `bin/cloudflared` (ignorado por Git). Ejemplo en Linux x86_64:
+El script espera el binario en `bin/cloudflared` (o `bin/cloudflared.exe` en Windows, ambos ignorados por Git). Ejemplo en Linux x86_64:
 
 ```sh
 mkdir -p bin
@@ -13,11 +13,42 @@ chmod +x bin/cloudflared
 bin/cloudflared --version
 ```
 
-Para otras plataformas descarga el binario desde las [descargas oficiales](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/). Si lo tienes instalado en el sistema, enlázalo con `ln -s "$(command -v cloudflared)" bin/cloudflared`.
+En Windows (PowerShell):
 
-## Iniciar
+```powershell
+New-Item -ItemType Directory -Force -Path bin
+Invoke-WebRequest -Uri https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -OutFile bin\cloudflared.exe
+.\bin\cloudflared.exe --version
+```
 
-Necesitas Bun, Node, yt-dlp, FFmpeg, Docker activo, dependencias instaladas, `.env` configurado y `bin/cloudflared` ejecutable. Ese binario es local y no se incluye en el repositorio; si lo instalaste en el sistema, adapta su ruta en el script `tunnel:run` de `package.json`.
+Para otras plataformas descarga el binario desde las [descargas oficiales](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/). Si lo tienes instalado en el sistema, enlázalo o mantén `cloudflared` en tu PATH.
+
+## Túnel con Docker (para desarrollo local)
+
+Si prefieres no descargar ni mantener el binario de cloudflared en tu máquina, Docker puede gestionar tanto PostgreSQL como el túnel:
+
+1. Levanta la base de datos y el túnel en Docker:
+```sh
+bun run dev:docker
+# o directamente: docker compose up -d db tunnel
+```
+
+2. Consulta la URL generada:
+```sh
+bun run tunnel:docker:logs
+# o: docker compose logs tunnel
+```
+
+3. Inicia tu entorno de desarrollo en local:
+```sh
+bun run dev
+```
+
+El contenedor del túnel utiliza `host.docker.internal:3001` para enrutar las peticiones públicas directamente al backend que corre en tu máquina.
+
+## Iniciar (con script local)
+
+Necesitas Bun, Node, yt-dlp, FFmpeg, Docker activo, dependencias instaladas, `.env` configurado y `bin/cloudflared` (o `bin/cloudflared.exe`) ejecutable. Ese binario es local y no se incluye en el repositorio.
 
 Desde la raíz, después de configurar `.env` como indica el [README](../README.md):
 

@@ -14,7 +14,13 @@ export async function profileRoutes() {
   }
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, allowExitOnIdle: true })
   pool.on('error', error => console.error('PostgreSQL:', error.message))
-  await pool.query(await readFile(new URL('../migrations/001-profiles.sql', import.meta.url), 'utf8'))
+  try {
+    await pool.query(await readFile(new URL('../migrations/001-profiles.sql', import.meta.url), 'utf8'))
+  } catch (error) {
+    console.warn('PostgreSQL no disponible al iniciar (revisa Docker `db`):', error.message)
+    router.use((req, res) => res.status(503).json({ error: 'Personalización no disponible (base de datos desconectada)' }))
+    return router
+  }
   const cleanup = () => pool.query("DELETE FROM profiles WHERE last_seen < now() - interval '1 year'; DELETE FROM taste_events WHERE created_at < now() - interval '90 days'").catch(e => console.error('Limpieza de perfiles:', e.message))
   await cleanup()
   setInterval(cleanup, 3600000).unref()
