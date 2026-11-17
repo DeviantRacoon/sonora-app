@@ -55,7 +55,9 @@ app.post('/api/downloads', wrap(async (req, res) => {
     return res.status(400).json({ error: 'Items inválidos' })
   const batch = enqueue(items.map((i) => ({ id: i.id, title: String(i.title || i.id), index: i.index })), album ? String(album) : null, req.device)
   if (!batch) return res.status(429).json({ error: 'La cola está llena; inténtalo más tarde' })
-  res.json(batch)
+  const { saved, ...state } = batch
+  if (!await saved) return res.status(503).json({ error: 'No se pudo guardar la descarga; inténtalo de nuevo' })
+  res.json(state)
 }))
 
 app.get('/api/downloads/batches/:bid/file', wrap(async (req, res) => {

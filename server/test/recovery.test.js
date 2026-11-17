@@ -5,9 +5,12 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
+import { Pool } from 'pg'
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-test('recupera trabajos interrumpidos y reutiliza el MP3 después de reiniciar', { timeout: 20000 }, async () => {
+test('recupera trabajos interrumpidos y reutiliza el MP3 después de reiniciar', { timeout: 20000, skip: !process.env.TEST_DATABASE_URL }, async () => {
+  const pg = new Pool({ connectionString: process.env.TEST_DATABASE_URL })
+  await pg.query('CREATE TABLE IF NOT EXISTS queue_batches (id TEXT PRIMARY KEY, data JSONB NOT NULL); CREATE TABLE IF NOT EXISTS queue_jobs (id INTEGER PRIMARY KEY, data JSONB NOT NULL); TRUNCATE queue_batches, queue_jobs')
   const dir = await mkdtemp(path.join(tmpdir(), 'sonora-recovery-'))
   const bin = path.join(dir, 'yt-dlp'), log = path.join(dir, 'calls')
   await writeFile(bin, `#!/usr/bin/env node
@@ -24,7 +27,7 @@ setTimeout(() => { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writ
   const fetch = (url, opts = {}) => globalThis.fetch(url, { ...opts, headers: { 'X-Sonora-Device': device, ...opts.headers } })
   let server
   const start = async () => {
-    server = spawn(process.execPath, ['index.js'], { cwd: new URL('..', import.meta.url), env: { ...process.env, PORT: String(port), MUSIC_DIR: path.join(dir, 'music'), YTDLP_PATH: bin }, stdio: 'ignore' })
+    server = spawn(process.execPath, ['index.js'], { cwd: new URL('..', import.meta.url), env: { ...process.env, PORT: String(port), DATABASE_URL: process.env.TEST_DATABASE_URL, MUSIC_DIR: path.join(dir, 'music'), YTDLP_PATH: bin }, stdio: 'ignore' })
     for (let i = 0; i < 100; i++) { try { await fetch(`${base}/api/downloads/batches/missing/file`); return } catch { await delay(30) } }
     throw new Error('Servidor no inició')
   }
@@ -50,5 +53,5 @@ setTimeout(() => { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writ
     assert.equal((await post(200)).status, 200)
     assert.equal((await post(100)).status, 200)
     assert.equal((await post(1)).status, 429)
-  } finally { await stop(); await rm(dir, { recursive: true, force: true }) }
+  } finally { await pg.end(); await stop(); await rm(dir, { recursive: true, force: true }) }
 })

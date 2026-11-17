@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
-import { DatabaseSync } from 'node:sqlite'
+import { Pool } from 'pg'
 import { mkdirSync, existsSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises'
 import path from 'node:path'
@@ -11,12 +11,18 @@ const root = path.resolve(MUSIC_DIR, '.sonora'), cacheDir = path.join(root, 'cac
 mkdirSync(cacheDir, { recursive: true })
 rmSync(tempDir, { recursive: true, force: true })
 mkdirSync(tempDir, { recursive: true })
-const db = new DatabaseSync(path.join(root, 'queue.sqlite'))
-db.exec('PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS batches (id TEXT PRIMARY KEY, data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, data TEXT NOT NULL)')
-const saveJob = db.prepare('INSERT OR REPLACE INTO jobs VALUES (?, ?)')
-const saveBatch = db.prepare('INSERT OR REPLACE INTO batches VALUES (?, ?)')
-const jobs = new Map(db.prepare('SELECT data FROM jobs').all().map(({ data }) => { const j = JSON.parse(data); return [j.jid, j] }))
-const batches = new Map(db.prepare('SELECT data FROM batches').all().map(({ data }) => { const b = JSON.parse(data); return [b.bid, b] }))
+// Sin DATABASE_URL la cola vive solo en memoria y se pierde al reiniciar.
+const pool = process.env.DATABASE_URL ? new Pool({ connectionString: process.env.DATABASE_URL, allowExitOnIdle: true }) : null
+pool?.on('error', (e) => console.error('PostgreSQL:', e.message))
+await pool?.query('CREATE TABLE IF NOT EXISTS queue_batches (id TEXT PRIMARY KEY, data JSONB NOT NULL); CREATE TABLE IF NOT EXISTS queue_jobs (id INTEGER PRIMARY KEY, data JSONB NOT NULL)')
+// Escrituras en serie para conservar el orden; un fallo se registra y no tumba la cola.
+let writes = Promise.resolve()
+const write = (sql, params) => pool ? (writes = writes.then(() => pool.query(sql, params)).then(() => true, (e) => { console.error('Error guardando cola:', e.message); return false })) : Promise.resolve(true)
+const saveJob = (job) => write('INSERT INTO queue_jobs VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = $2', [job.jid, job])
+const saveBatch = (batch) => write('INSERT INTO queue_batches VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = $2', [batch.bid, batch])
+const load = async (table) => pool ? (await pool.query(`SELECT data FROM ${table}`)).rows.map((r) => r.data) : []
+const jobs = new Map((await load('queue_jobs')).map((j) => [j.jid, j]))
+const batches = new Map((await load('queue_batches')).map((b) => [b.bid, b]))
 let n = Math.max(0, ...jobs.keys()), running = 0
 export const events = new EventEmitter()
 const activeFiles = new Map(), downloads = new Map()
@@ -24,10 +30,10 @@ const activeFiles = new Map(), downloads = new Map()
 for (const job of jobs.values()) {
   if (job.status === 'downloading') { job.status = 'queued'; job.percent = 0 }
   if (job.status === 'done' && (!job.file || !existsSync(job.file))) { job.status = 'error'; job.error = 'No se encontró el MP3; vuelve a intentarlo'; delete job.file }
-  saveJob.run(job.jid, JSON.stringify(job))
+  saveJob(job)
 }
 for (const batch of batches.values()) {
-  if (!batch.completedAt && batch.jids.every((id) => ['done', 'error'].includes(jobs.get(id)?.status))) { batch.completedAt = Date.now(); saveBatch.run(batch.bid, JSON.stringify(batch)) }
+  if (!batch.completedAt && batch.jids.every((id) => ['done', 'error'].includes(jobs.get(id)?.status))) { batch.completedAt = Date.now(); saveBatch(batch) }
 }
 const publicJob = ({ file, ...job }) => job
 const batchState = (batch) => {
@@ -43,10 +49,10 @@ const publish = (job) => {
 const set = (job, patch) => {
   Object.assign(job, patch)
   if ('status' in patch) {
-    saveJob.run(job.jid, JSON.stringify(job))
+    saveJob(job)
     const batch = batches.get(job.bid)
     batch.completedAt = batchState(batch).ready ? Date.now() : null
-    saveBatch.run(batch.bid, JSON.stringify(batch))
+    saveBatch(batch)
   }
   publish(job)
 }
@@ -68,14 +74,12 @@ export function enqueue(items, album, owner, playback = false) {
   const batch = { bid, owner, playback, title: album || (items.length === 1 ? items[0].title : 'Selección de canciones'), jids: [], completedAt: null }
   const added = items.map((it) => ({ jid: ++n, bid, id: it.id, title: it.title, album: album || null, status: 'queued', percent: 0, error: null }))
   batch.jids = added.map((j) => j.jid)
-  db.exec('BEGIN')
-  try { saveBatch.run(bid, JSON.stringify(batch)); for (const job of added) saveJob.run(job.jid, JSON.stringify(job)); db.exec('COMMIT') }
-  catch (e) { db.exec('ROLLBACK'); throw e }
+  const saved = write("WITH b AS (INSERT INTO queue_batches VALUES ($1, $2)) INSERT INTO queue_jobs SELECT (j->>'jid')::int, j FROM jsonb_array_elements($3::jsonb) j", [bid, batch, JSON.stringify(added)])
   batches.set(bid, batch)
   for (const job of added) jobs.set(job.jid, job)
   for (const job of added) publish(job)
   pump()
-  return batchState(batch)
+  return Object.assign(batchState(batch), { saved })
 }
 async function cachedDownload(job, progress) {
   const file = path.join(cacheDir, `${job.id}.mp3`)
@@ -112,9 +116,7 @@ async function cleanup() {
   const now = Date.now()
   for (const [bid, batch] of batches) {
     if (!batch.completedAt || now - batch.completedAt < RETENTION || batch.jids.some((id) => activeFiles.has(jobs.get(id)?.file))) continue
-    db.exec('BEGIN')
-    try { for (const id of batch.jids) db.prepare('DELETE FROM jobs WHERE id = ?').run(id); db.prepare('DELETE FROM batches WHERE id = ?').run(bid); db.exec('COMMIT') }
-    catch (e) { db.exec('ROLLBACK'); throw e }
+    write('WITH j AS (DELETE FROM queue_jobs WHERE id = ANY($1)) DELETE FROM queue_batches WHERE id = $2', [batch.jids, bid])
     for (const id of batch.jids) jobs.delete(id)
     batches.delete(bid)
     events.emit('job', { type: 'batch_removed', bid }, batch.owner, batch.playback)
