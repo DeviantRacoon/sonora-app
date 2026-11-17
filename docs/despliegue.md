@@ -22,6 +22,12 @@ Abre `http://localhost:5173`. `dev` inicia Vite y Node con recarga y detiene amb
 
 Para levantar backend y base mediante contenedores, usa `docker compose up --build`; ejecuta únicamente `bun run --filter web dev` para la interfaz. No ejecutes a la vez el backend de Compose y `bun run dev`: ambos ocuparían el puerto 3001.
 
+## Compartir por Cloudflare Tunnel
+
+`bun run tunnel` levanta PostgreSQL, compila el frontend, mantiene la recompilación en modo watch e inicia la API con recarga y un túnel hacia `127.0.0.1:3001`. Mantén `VITE_API_BASE_URL` vacío y detén antes otros procesos en ese puerto. Espera a PostgreSQL con `docker compose up -d --wait db` antes del primer arranque.
+
+Para actualizar código sin cambiar el enlace, guarda, espera al build y recarga el navegador. No reinicies el túnel: un nuevo dominio temporal crea otro origen para el perfil, historial de descargas y PWA. Consulta [Cloudflare Tunnel](tunnel.md) para requisitos, instalación, actualización y diagnóstico.
+
 ## Frontend de producción: Netlify
 
 1. Conecta el repositorio y selecciona la rama que deseas publicar.
@@ -82,7 +88,7 @@ curl --fail https://tu-backend.up.railway.app/api/health
 curl -i -X OPTIONS https://tu-backend.up.railway.app/api/profile \
   -H 'Origin: https://tu-sitio.netlify.app' \
   -H 'Access-Control-Request-Method: POST' \
-  -H 'Access-Control-Request-Headers: authorization,content-type'
+  -H 'Access-Control-Request-Headers: authorization,content-type,x-sonora-device'
 ```
 
 El primer comando debe devolver `{"ok":true}`. El segundo debe devolver 204 y `Access-Control-Allow-Origin` con el origen autorizado. El healthcheck confirma que la API responde; comprueba también en el frontend búsquedas, reproducción, descargas, actualizaciones de la cola y preferencias del navegador.
@@ -97,3 +103,11 @@ bun run prod:frontend
 ```
 
 La prueba de integración de perfiles requiere `TEST_DATABASE_URL` apuntando a una base vacía y exclusiva de pruebas; consulta el README.
+
+## Verificar PWA y separación de dispositivos
+
+El build debe publicar `index.html`, `sw.js`, `manifest.webmanifest`, `icons/` y los recursos generados. La instalación requiere HTTPS o localhost. El service worker solo se registra en producción; el servidor de desarrollo Vite no activa esa caché.
+
+Desde la URL final, comprueba la instalación desde Ajustes y la apertura de la interfaz sin conexión. Las búsquedas, recomendaciones, audio y archivos necesitan acceso a la API; la PWA no guarda una biblioteca musical offline. Una nueva versión del service worker puede esperar a que se cierren todas las ventanas y pestañas de la anterior.
+
+Prueba una descarga desde dos navegadores o dispositivos: cada uno debe mostrar solo su historial, progreso y archivos. Conserva el almacenamiento del navegador para mantener su identidad. Comprueba también reproducción, pausa y cambio de pista; la continuidad con pantalla apagada necesita una prueba en el dispositivo real y depende del navegador y sistema.

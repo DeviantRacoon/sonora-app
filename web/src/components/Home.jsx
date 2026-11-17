@@ -8,8 +8,7 @@ import search from '@iconify-icons/solar/magnifer-line-duotone'
 
 export default function Home({ tracks, preferences, enabled, state, unavailable, recent, onSearch, onPreview, onDownload, onPreference, onFocusSearch, onSettings, playingId }) {
   return <div className="music-home view-enter">
-    <header className="home-heading"><h1>Qué bueno escucharte.</h1></header>
-    <section aria-labelledby="for-you-title"><div className="home-section-heading"><div><h2 id="for-you-title">Hecho para ti</h2><p>{enabled ? 'Tu próxima escucha empieza aquí.' : 'Tu música, a tu manera.'}</p></div><button className="text-button" onClick={onSettings}>Personalizar</button></div>
+    <section aria-labelledby="for-you-title"><div className="home-section-heading"><div><p className="home-greeting">Qué bueno escucharte.</p><h1 id="for-you-title">Hecho para ti</h1></div><button className="text-button" onClick={onSettings}>Personalizar</button></div>
       {enabled && tracks.length > 0 ? <div className="recommendation-grid view-enter">{tracks.map(track => <article className="music-card" key={track.id}>
         <button className="music-cover" onClick={() => onPreview(track)} aria-label={`Reproducir ${track.title}`}><img src={track.thumb} alt="" loading="lazy" /><span className="cover-play"><Icon icon={play} width="24" /></span>{playingId === track.id && <span className="card-playing">En reproducción</span>}</button>
         <h3>{track.title}</h3><p className="card-artist">{track.artist || track.channel || 'Artista desconocido'}</p><p className="card-reason">{track.reason}</p>

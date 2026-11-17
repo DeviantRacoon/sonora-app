@@ -8,7 +8,9 @@
   ],
   "scripts": {
     "dev": "concurrently --kill-others -n api,web \"bun run --filter server dev\" \"bun run --filter web dev\"",
-    "tunnel": "docker compose up -d db && VITE_API_BASE_URL= bun run build && concurrently --kill-others -n build,api,tunnel \"VITE_API_BASE_URL= bun run --filter web build --watch\" \"HOST=127.0.0.1 PORT=3001 bun run --filter server dev\" \"bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:3001\"",
+    "tunnel": "node scripts/tunnel.js",
+    "tunnel:stop": "node scripts/tunnel.js --stop",
+    "tunnel:run": "docker compose up -d --wait db && VITE_API_BASE_URL= bun run build && concurrently --kill-others -n build,api,tunnel \"VITE_API_BASE_URL= bun run --filter web build --watch\" \"HOST=127.0.0.1 PORT=3001 bun run --filter server dev\" \"bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:3001\"",
     "prod:frontend": "bun run --filter web build",
     "prod:backend": "bun run --filter server start",
     "build": "bun run prod:frontend",

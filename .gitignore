@@ -6,3 +6,4 @@ netlify/server/bin/
 .env
 .env.local
 web/.env.local
+.tunnel/

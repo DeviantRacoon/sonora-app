@@ -37,7 +37,23 @@ function updateUrl(query, playlist = '') {
 export default function App() {
   const [recommendations, setRecommendations] = useState({ tracks: [], preferences: {}, state: 'learning' })
   const [personalized, setPersonalized] = useState(personalizationEnabled)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(() => new URLSearchParams(window.location.search).get('view') === 'settings')
+  const openSettings = () => {
+    if (settingsOpen) return
+    const url = new URL(window.location.href)
+    url.searchParams.set('view', 'settings')
+    window.history.pushState({ settings: true }, '', url)
+    setSettingsOpen(true); window.scrollTo(0, 0)
+  }
+  const closeSettings = () => {
+    if (window.history.state?.settings) window.history.back()
+    else {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('view')
+      window.history.replaceState(null, '', url)
+      setSettingsOpen(false)
+    }
+  }
   const [profileError, setProfileError] = useState('')
   const refreshRecommendations = () => profileRequest('/recommendations').then(setRecommendations).catch(() => setProfileError('Las recomendaciones no están disponibles por ahora.'))
   useEffect(() => {
@@ -54,6 +70,7 @@ export default function App() {
   const [album, setAlbum] = useState(null)
   const [sel, setSel] = useState(new Map())
   const [pending, setPending] = useState('')
+  const [searchingQuery, setSearchingQuery] = useState('')
   const [sending, setSending] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState({ title: '', detail: '' })
   const [error, setError] = useState('')
@@ -191,10 +208,10 @@ export default function App() {
 
   const search = async (value, { restore = false, playlist = '' } = {}) => {
     const query = value.trim().slice(0, 200)
-    if (!query) return
+    if (!query || (!restore && pending === 'search' && query === searchingQuery)) return
     const id = ++request.current
     if (!restore) updateUrl(query)
-    setQ(query); setSuggestionsOpen(false); setLoadingMessage({ title: 'Buscando tu música', detail: `Estamos buscando “${query}”` }); setPending('search'); setError(''); setAlbum(null); setSel(new Map())
+    setQ(query); setSearchingQuery(query); setSuggestionsOpen(false); setLoadingMessage({ title: 'Buscando tu música', detail: `Estamos buscando “${query}”` }); setPending('search'); setError(''); setAlbum(null); setSel(new Map())
     if (!restore) {
       const next = [query, ...recent.filter((item) => item.toLowerCase() !== query.toLowerCase())].slice(0, 6)
       setRecent(next); localStorage.setItem('sonora-searches', JSON.stringify(next))
@@ -219,6 +236,9 @@ export default function App() {
   useEffect(() => {
     const restore = () => {
       const params = new URLSearchParams(window.location.search)
+      const settings = params.get('view') === 'settings'
+      setSettingsOpen(settings)
+      if (settings) return
       const query = params.get('q')?.trim()
       if (query) search(query, { restore: true, playlist: params.get('playlist') || '' })
       else { request.current++; setQ(''); setResults(null); setSearched(''); setAlbum(null); setSel(new Map()); setPending(''); setError('') }
@@ -265,15 +285,15 @@ export default function App() {
   return <div className={`app-shell ${results || pending === 'search' || pending === 'album' ? 'is-browsing' : ''}`}>
     <header className="topbar">
       <a className="brand" href="/" aria-label="Sonora, inicio"><span className="brand-icon"><Logo /></span><span>sonora<span className="brand-dot">.</span></span></a>
-      <div className="top-actions"><button className="icon-button" onClick={() => setSettingsOpen(true)} aria-label="Abrir ajustes" title="Tu experiencia"><Icon icon={settings} width="22" aria-hidden="true" /></button><button className="icon-button theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Activar tema claro' : 'Activar tema oscuro'} title="Cambiar tema"><Icon icon={theme === 'dark' ? sun : moon} width="22" aria-hidden="true" /></button><button className="queue-trigger" onClick={() => setQueueOpen(true)}><Icon icon={download} width="20" aria-hidden="true" /> Descargas <span className="count">{active}</span></button></div>
+      <div className="top-actions"><button className="icon-button" onClick={openSettings} aria-label="Abrir ajustes" title="Tu experiencia"><Icon icon={settings} width="22" aria-hidden="true" /></button><button className="icon-button theme-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? 'Activar tema claro' : 'Activar tema oscuro'} title="Cambiar tema"><Icon icon={theme === 'dark' ? sun : moon} width="22" aria-hidden="true" /></button><button className="queue-trigger" onClick={() => setQueueOpen(true)}><Icon icon={download} width="20" aria-hidden="true" /> Descargas <span className="count">{active}</span></button></div>
     </header>
 
     <audio ref={audio} preload="none" onPlaying={() => { setPlaying(true); setAudioLoading(false); setAudioError('') }} onPause={() => setPlaying(false)} onLoadStart={() => { setAudioLoading(true); setAudioError('') }} onWaiting={() => setAudioLoading(true)} onCanPlay={() => setAudioLoading(false)} onLoadedMetadata={() => setDuration(Number.isFinite(audio.current.duration) ? audio.current.duration : 0)} onTimeUpdate={() => setPosition(audio.current.currentTime)} onEnded={() => { setPlaying(false); skip(1) }} onError={() => { setPlaying(false); setAudioLoading(false); setAudioError('No se pudo cargar el audio. Pulsa reproducir para reintentar.') }} />
-    <main className="workspace">
+    <main className="workspace" hidden={settingsOpen}>
       <nav className="music-navigation" aria-label="Navegación principal"><button className={!results ? 'active' : ''} aria-label="Inicio" aria-current={!results ? 'page' : undefined} onClick={() => transitionView(() => { request.current++; updateUrl(''); setResults(null); setAlbum(null); setSel(new Map()); setQ(''); setPending(''); setError('') })}><Icon icon={home} width="20" /><span>Inicio</span></button></nav>
       <section className="search-area" aria-label="Buscar música">
         <form className="search-box" onSubmit={(e) => { e.preventDefault(); search(q) }}>
-          <Icon className="search-icon" icon={searchIcon} width="24" aria-hidden="true" /><label className="sr-only" htmlFor="music-search">Canción, artista o álbum</label><input id="music-search" ref={input} value={q} onChange={(e) => { setQ(e.target.value); setSuggestionsOpen(true) }} onFocus={() => setSuggestionsOpen(true)} onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)} autoComplete="off" placeholder="Canción o artista" /><kbd className="keyboard-shortcut">/</kbd><button className="primary-button" type="submit" disabled={!q.trim()}>Buscar <Icon icon={arrowUp} width="18" aria-hidden="true" /></button>
+          <Icon className="search-icon" icon={searchIcon} width="24" aria-hidden="true" /><label className="sr-only" htmlFor="music-search">Canción, artista o álbum</label><input id="music-search" ref={input} value={q} onChange={(e) => { setQ(e.target.value); setSuggestionsOpen(true) }} onFocus={() => setSuggestionsOpen(true)} onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)} autoComplete="off" placeholder="Canción o artista" /><kbd className="keyboard-shortcut">/</kbd><button className="primary-button" type="submit" disabled={!q.trim() || (pending === 'search' && q.trim().slice(0, 200) === searchingQuery)}>Buscar <Icon icon={arrowUp} width="18" aria-hidden="true" /></button>
         </form>
         {suggestionsOpen && suggestions.length > 0 && <div className="suggestions"><span>BÚSQUEDAS RECIENTES</span>{suggestions.map((item) => <button key={item} onMouseDown={(e) => e.preventDefault()} onClick={() => search(item)}><Icon icon={arrowUp} width="18" aria-hidden="true" /> <span>{item}</span></button>)}</div>}
         <p className="search-hint">Busca canciones, artistas o playlists <span className="keyboard-shortcut">· Presiona <kbd>/</kbd> para buscar</span></p>
@@ -289,7 +309,7 @@ export default function App() {
           <div className={`search-loading ${pending === 'search' || pending === 'album' ? 'is-visible' : ''}`} aria-hidden={pending !== 'search' && pending !== 'album'}><div className="loader-orbit"><span className="loader-ring" /><span className="loader-ring loader-ring-outer" /><Logo loading={pending === 'search' || pending === 'album'} /></div><span className="loading-kicker">UN MOMENTO</span><h2>{loadingMessage.title}</h2><p>{loadingMessage.detail}</p><span className="loading-dots" aria-hidden="true"><i /><i /><i /></span></div>
           <span className="sr-only" role="status">{pending === 'search' || pending === 'album' ? loadingMessage.title : ''}</span>
         <div className="results" aria-busy={pending === 'search' || pending === 'album'} inert={pending === 'search' || pending === 'album' ? '' : undefined}>
-          {!results && <Home tracks={recommendations.tracks} preferences={recommendations.preferences} enabled={personalized} state={recommendations.state} unavailable={!!profileError} recent={recent} onSearch={search} onPreview={selectPreview} onDownload={t => send([t])} onPreference={preference} onFocusSearch={() => input.current?.focus()} onSettings={() => setSettingsOpen(true)} playingId={playing ? preview?.id : null} />}
+          {!results && <Home tracks={recommendations.tracks} preferences={recommendations.preferences} enabled={personalized} state={recommendations.state} unavailable={!!profileError} recent={recent} onSearch={search} onPreview={selectPreview} onDownload={t => send([t])} onPreference={preference} onFocusSearch={() => input.current?.focus()} onSettings={openSettings} playingId={playing ? preview?.id : null} />}
           {results && <div key={album?.id || searched} className="view-enter">
             <div className="section-heading"><div><span className="section-kicker">{album ? 'TU SELECCIÓN' : 'EXPLORA TU MÚSICA'}</span><h2>{album ? album.title : <>Resultados para <span>“{searched}”</span></>}</h2></div>{album && <button className="text-button" onClick={() => transitionView(() => { updateUrl(searched); setAlbum(null); setSel(new Map()) })}><Icon icon={arrowLeft} width="16" aria-hidden="true" /> Volver a resultados</button>}</div>
             {!album && results.playlists.length > 0 && <section className="playlist-section"><div className="subheading"><h3>Álbumes y playlists</h3><span>UNA COLECCIÓN PARA CADA MOMENTO</span></div><div className="playlist-grid">{results.playlists.slice(0, 4).map((p) => <button key={p.id} onClick={() => openAlbum(p)} className="playlist-card"><div className="playlist-image">{p.thumb ? <img src={p.thumb} alt="" loading="lazy" /> : <Logo />}<span className="playlist-arrow"><Icon icon={arrowUp} width="18" aria-hidden="true" /></span></div><strong>{p.title}</strong><small>{p.channel || 'Playlist'}{p.count ? ` · ${p.count} pistas` : ''}</small></button>)}</div></section>}
@@ -315,9 +335,9 @@ export default function App() {
         </aside>
       </div>
     </main>
-    <div className={`selection-bar ${sel.size ? 'visible' : ''}`} aria-hidden={!sel.size}><span><strong>{sel.size}</strong> {sel.size === 1 ? 'canción seleccionada' : 'canciones seleccionadas'}</span><button className="primary-button" disabled={!sel.size || sending} onClick={() => send([...sel.values()], album?.title)}>Descargar {album ? 'playlist' : 'selección'} <Icon icon={download} width="18" aria-hidden="true" /></button></div>
+    <div className={`selection-bar ${sel.size && !settingsOpen ? 'visible' : ''}`} aria-hidden={!sel.size || settingsOpen}><span><strong>{sel.size}</strong> {sel.size === 1 ? 'canción seleccionada' : 'canciones seleccionadas'}</span><button className="primary-button" disabled={!sel.size || sending} onClick={() => send([...sel.values()], album?.title)}>Descargar {album ? 'playlist' : 'selección'} <Icon icon={download} width="18" aria-hidden="true" /></button></div>
     <div className="toast-region" role="status" aria-live="polite" aria-atomic="true">{queueMessage && <div className="toast" key={queueMessage.id}><Icon icon={checkCircle} className="toast-icon" aria-hidden="true" /><span>{queueMessage.text}</span></div>}</div>
-    <Preferences open={settingsOpen} onClose={() => setSettingsOpen(false)} enabled={personalized} error={profileError} onToggle={async () => { try { await setPersonalization(!personalized); setPersonalized(!personalized); setProfileError('') } catch { setProfileError('No se pudo actualizar tu perfil. Inténtalo de nuevo.') } }} onErase={async () => { try { await eraseProfile(); setPersonalized(false); setRecommendations({ tracks: [], preferences: {}, state: 'disabled' }); setProfileError('') } catch { setProfileError('No se pudo borrar el perfil. Inténtalo de nuevo.') } }} />
+    <Preferences open={settingsOpen} onClose={closeSettings} enabled={personalized} error={profileError} onToggle={async () => { try { await setPersonalization(!personalized); setPersonalized(!personalized); setProfileError('') } catch { setProfileError('No se pudo actualizar tu perfil. Inténtalo de nuevo.') } }} onErase={async () => { try { await eraseProfile(); setPersonalized(false); setRecommendations({ tracks: [], preferences: {}, state: 'disabled' }); setProfileError('') } catch { setProfileError('No se pudo borrar el perfil. Inténtalo de nuevo.') } }} />
     <DownloadQueue jobs={jobs} batches={batches} open={queueOpen} onClose={() => setQueueOpen(false)} />
   </div>
 }
