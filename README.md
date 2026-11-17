@@ -19,6 +19,7 @@ bun run dev
 | Comando desde la raíz | Uso |
 | --- | --- |
 | `bun run dev` | Frontend y backend en desarrollo |
+| `bun run tunnel` | PostgreSQL, frontend con recompilación automática, API con recarga y Cloudflare Tunnel |
 | `bun run prod:frontend` | Compilar frontend de producción en `web/dist` |
 | `bun run prod:backend` | Iniciar solo la API con `NODE_ENV=production` |
 | `bun run build` / `bun run build:netlify` | Alias de `prod:frontend` |
@@ -28,14 +29,13 @@ El frontend de producción es estático y lo sirve Netlify. La API usa `HOST` y 
 
 ## Cloudflare Tunnel
 
-Para compartir frontend y API con una sola URL, compila con la URL de API vacía y apunta el túnel al backend, que también sirve `web/dist`:
+Para compartir frontend y API con una sola URL y actualizar al guardar cambios:
 
 ```sh
-VITE_API_BASE_URL= bun run build
-bun run start
-# En otra terminal, con cloudflared instalado (en esta máquina: bin/cloudflared):
-bin/cloudflared tunnel --url http://127.0.0.1:3001
+bun run tunnel
 ```
+
+Necesitas `.env` configurado, Docker activo y `bin/cloudflared` instalado (ya está en esta máquina). Detén antes cualquier `bun run dev` o backend que ocupe el puerto 3001. El comando inicia PostgreSQL, compila con `VITE_API_BASE_URL` vacío y sirve la interfaz desde el backend en `127.0.0.1:3001`. Al guardar cambios, Vite recompila el frontend y Node reinicia la API cuando cambian sus archivos; recarga el navegador para ver la interfaz nueva. El túnel conserva su URL durante estas actualizaciones. `Ctrl+C` detiene los procesos del comando; PostgreSQL sigue ejecutándose en Docker.
 
 Usa el enlace HTTPS `trycloudflare.com` que imprime el túnel. Las peticiones a `/api`, los perfiles y los archivos descargados comparten ese origen; no necesitas cambiar `FRONTEND_ORIGINS`. La cola usa consultas periódicas en ese dominio porque los túneles rápidos no admiten SSE. Mantén PostgreSQL, el backend y el túnel encendidos. El enlace es temporal y cambia al reiniciar el túnel; para una URL fija configura un túnel con dominio propio en Cloudflare. Cualquier persona con el enlace puede usar la aplicación y acceder a la cola compartida.
 
