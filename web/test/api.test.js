@@ -40,3 +40,19 @@ test('crea y recupera un UUID privado incluso sin randomUUID en HTTP local', asy
   const reloaded = await import('../src/api.js?reloaded-device')
   assert.equal(reloaded.deviceId(), id)
 })
+
+test('aplica snapshots y actualizaciones agrupadas sin conservar trabajos expirados', async () => {
+  const { updateJobs } = await import('../src/api.js')
+  const empty = { jobs: {}, batches: {} }
+  const jobs = Array.from({ length: 500 }, (_, jid) => ({ jid, bid: 'large', status: 'queued' }))
+  const initial = updateJobs(empty, { type: 'snapshot', jobs, batches: [{ bid: 'large', total: 500 }] })
+  assert.equal(Object.keys(initial.jobs).length, 500)
+  const changed = updateJobs(initial, { type: 'updates', jobs: [{ ...jobs[0], status: 'done' }], batches: [{ bid: 'large', complete: 1 }] })
+  assert.equal(changed.jobs[0].status, 'done')
+  assert.equal(changed.jobs[499].status, 'queued')
+  assert.equal(initial.jobs[0].status, 'queued')
+  const terminal = updateJobs(changed, { type: 'job', jid: 1, bid: 'large', status: 'error', attempts: 3 })
+  assert.equal(terminal.jobs[1].attempts, 3)
+  assert.deepEqual(updateJobs(terminal, { type: 'snapshot', jobs: [], batches: [] }), empty)
+  assert.deepEqual(updateJobs(terminal, { type: 'batch_removed', bid: 'large' }), empty)
+})

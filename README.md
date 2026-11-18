@@ -67,21 +67,21 @@ Instalación de `cloudflared`, dominio fijo, verificación y resolución de prob
 
 ## Todo en Docker (imagen + túnel)
 
-La imagen incluye la API y el frontend compilado (mismo origen), así que se puede compartir sin Bun ni Node en el host:
+La imagen incluye la API, el frontend compilado (mismo origen), `yt-dlp` y `ffmpeg`, y PostgreSQL corre en su propio contenedor. Con solo Docker instalado:
 
 ```sh
-mkdir -p .certs && cp /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem .certs/ca-bundle.pem   # una vez, ANTES de levantar (ver nota)
+git clone <repo> && cd music-downloader
 docker compose up -d --build                      # API + frontend en http://localhost:3001, con PostgreSQL
-docker compose --profile tunnel up -d             # añade cloudflared
+docker compose --profile tunnel up -d             # opcional: añade cloudflared
 docker compose logs tunnel | grep -o 'https://[a-z-]*\.trycloudflare\.com' | grep -v '//api\.'   # URL pública
 docker compose --profile tunnel stop tunnel       # cerrar el túnel (la URL cambia al reiniciarlo)
 ```
 
+- No necesita `.env`: la contraseña de PostgreSQL por defecto es `sonora-local` (el puerto solo escucha en `127.0.0.1`). Para otra, define `POSTGRES_PASSWORD` (y `MUSIC_USER_AGENT` con un contacto real) en `.env`.
 - No lo combines con `bun run dev` ni `bun run tunnel`: todos usan el puerto 3001.
-- Nota `.certs`: **no viene en el clon** (está en `.gitignore`) y **ningún script lo crea**; hay que crearlo a mano antes del primer `docker compose up`. Si falta, Docker crea una carpeta con ese nombre y el contenedor falla. Lo usan el backend y `cloudflared`, que necesitan las CAs del host si tu red inspecciona TLS (error `x509: certificate signed by unknown authority`).
-  - Debian/Ubuntu: copia `/etc/ssl/certs/ca-certificates.crt`.
-  - Windows (PowerShell): `mkdir .certs; curl.exe -o .certs\ca-bundle.pem https://curl.se/ca/cacert.pem`. Si tu red inspecciona TLS, añade al final la CA corporativa exportada en Base64 (`certmgr.msc`).
-  - Si no lo necesitas, un archivo cualquiera con las CAs públicas basta.
+- Redes que inspeccionan TLS (error `x509: certificate signed by unknown authority`): crea `.certs/ca-bundle.pem` con las CAs del host y levanta con `-f compose.yaml -f compose.certs.yaml`.
+  - Fedora: copia `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`. Debian/Ubuntu: `/etc/ssl/certs/ca-certificates.crt`.
+  - Windows (PowerShell): `mkdir .certs; curl.exe -o .certs\ca-bundle.pem https://curl.se/ca/cacert.pem`; añade al final la CA corporativa en Base64 si aplica.
 - Tras cambiar código, repite `docker compose up -d --build` (no hay recarga en caliente).
 
 ## Despliegue

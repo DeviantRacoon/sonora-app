@@ -3,15 +3,15 @@
 ## Búsquedas y caché
 
 - La búsqueda acepta hasta 200 caracteres; los IDs de video y playlist se validan en el servidor.
-- Una playlist devuelve como máximo sus primeras 200 entradas.
-- Se ejecutan hasta cuatro procesos de consulta simultáneos, con 60 segundos y 10 MB de salida combinada como máximo por proceso.
-- Las cachés del servidor y del navegador conservan hasta 200 resultados durante 10 minutos. Las consultas idénticas pendientes comparten la misma promesa.
+- Una playlist devuelve como máximo sus primeras 500 entradas.
+- Se ejecutan hasta cuatro procesos de consulta simultáneos, con 60 segundos y 10 MB de salida combinada como máximo por proceso. Se admiten hasta 32 consultas esperando un proceso durante 15 segundos; saturación devuelve 503 con `Retry-After`.
+- La caché de respuestas del servidor conserva hasta 200 resultados / 16 MiB en memoria y, con PostgreSQL, hasta 2.000 resultados / 64 MiB de JSON serializado. El TTL absoluto es de 10 minutos; respuestas mayores de 1 MiB, errores y resultados parciales no se guardan. Las consultas idénticas comparten promesa; se admiten hasta 32 claves pendientes. Sin PostgreSQL funciona en memoria; un fallo de caché persistente no impide devolver el resultado. La caché del navegador conserva hasta 200 resultados durante 10 minutos.
 
 ## Cola y descargas
 
-- Cada lote contiene entre 1 y 200 canciones; la cola admite hasta 500 trabajos pendientes o activos. Si no hay capacidad para todo el lote, la API responde con HTTP 429.
-- Se ejecutan hasta dos descargas simultáneas. Cada proceso dispone de 30 minutos como máximo.
-- El progreso se publica cuando cambia el porcentaje entero. Los trabajos fallidos pueden reintentarse.
+- Cada lote contiene entre 1 y 500 canciones; la cola admite hasta 1.000 trabajos pendientes o activos de descarga y una reserva de 16 para reproducción. Si no hay capacidad para todo el lote, la API responde con HTTP 429.
+- Se ejecutan hasta dos descargas reales simultáneas, compartidas entre trabajos del mismo video. Los lotes alternan turnos y la reproducción tiene prioridad al liberarse un cupo. Cada proceso dispone de 30 minutos como máximo.
+- El progreso se agrupa cada 250 ms y los estados finales se publican inmediatamente. Cada trabajo dispone de tres intentos, con esperas de 2 y 10 segundos sin ocupar un cupo. El reintento manual abre otra ronda de tres intentos. Con PostgreSQL, los trabajos y sus transiciones se guardan antes de ejecutarse; los interrumpidos se recuperan al reiniciar. Un fallo de persistencia pausa admisiones y ejecuciones hasta recuperar la escritura.
 - Cada lote conserva los títulos solicitados para nombrar los archivos entregados.
 
 ## Conservación
@@ -26,7 +26,7 @@
 - Historial, eventos, archivos y reintentos de descargas se filtran por un UUID v4 privado del navegador. No se utiliza el perfil de recomendaciones para esta separación.
 - Las pestañas del mismo navegador y origen comparten el identificador. Un navegador, origen o dispositivo distinto obtiene otro; borrar los datos locales pierde el acceso al historial anterior.
 - Los lotes anteriores sin propietario no se reasignan ni se muestran. Los archivos siguen sujetos a la retención habitual.
-- Preparar audio comparte la concurrencia y el límite global de trabajos pendientes; no crea una descarga visible. El endpoint espera hasta tres minutos a la preparación antes de devolver un error; el trabajo ya encolado puede continuar.
+- Preparar audio comparte la concurrencia y utiliza su reserva de 16 trabajos pendientes; no crea una descarga visible. El endpoint espera hasta tres minutos a la preparación antes de devolver un error; el trabajo ya encolado puede continuar.
 - El audio admite rangos HTTP y controles Media Session cuando están disponibles. La continuidad con pantalla apagada depende del navegador y del sistema; el video pausa el audio nativo.
 
 ## Personalización

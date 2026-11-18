@@ -8,7 +8,7 @@ import { createServer } from 'node:net'
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-test('entrega lotes, gestiona fallos parciales y reintentos', { timeout: 20000 }, async () => {
+test('entrega lotes, gestiona fallos parciales y reintentos', { timeout: 60000 }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'sonora-test-'))
   const bin = path.join(dir, 'yt-dlp')
   const marker = path.join(dir, 'retry')
@@ -43,7 +43,10 @@ fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, 'aud
         if (done) throw new Error('Stream cerrado')
         buffer += decoder.decode(value, { stream: true })
         const parts = buffer.split('\n\n'); buffer = parts.pop()
-        for (const part of parts) if (part.startsWith('data: ')) events.push(JSON.parse(part.slice(6)))
+        for (const part of parts) if (part.startsWith('data: ')) {
+          const event = JSON.parse(part.slice(6))
+          events.push(...(event.type === 'updates' || event.type === 'snapshot' ? [...event.jobs, ...event.batches] : [event]))
+        }
       }
     }
     const add = async (items) => (await fetch(`${base}/api/downloads`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) })).json()

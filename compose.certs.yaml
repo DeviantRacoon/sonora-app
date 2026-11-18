@@ -1,0 +1,13 @@
+# Opcional, solo si tu red inspecciona TLS (error "x509: certificate signed by unknown authority").
+# Uso: docker compose -f compose.yaml -f compose.certs.yaml up -d --build  (requiere .certs/ca-bundle.pem)
+services:
+  backend:
+    environment:
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/ca-certificates.crt
+    volumes:
+      - ./.certs/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro,z
+  tunnel:
+    volumes:
+      - ./.certs/ca-bundle.pem:/etc/ssl/certs/ca-certificates.crt:ro,z

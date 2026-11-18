@@ -2,13 +2,23 @@ import { cached } from './cache.js'
 import { search } from './ytdlp.js'
 
 let nextCall = Promise.resolve()
-async function metadata(url) {
-  const response = await (nextCall = nextCall.catch(() => {}).then(async () => {
-    await new Promise(resolve => setTimeout(resolve, 1100))
-    return fetch(url, { headers: { 'User-Agent': process.env.MUSIC_USER_AGENT || 'Sonora/1.0 (local development)' }, signal: AbortSignal.timeout(10000) })
-  }))
-  if (!response.ok) throw new Error(`Proveedor musical: ${response.status}`)
-  return response.json()
+async function metadata(url, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await (nextCall = nextCall.catch(() => {}).then(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1200))
+        return fetch(url, { headers: { 'User-Agent': process.env.MUSIC_USER_AGENT || 'Sonora/1.0 (local development)' }, signal: AbortSignal.timeout(10000) })
+      }))
+      if (response.status === 503 && attempt < retries) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        continue
+      }
+      if (!response.ok) throw new Error(`Proveedor musical: ${response.status}`)
+      return await response.json()
+    } catch (e) {
+      if (attempt === retries) throw e
+    }
+  }
 }
 export function artistHint(track) {
   const title = track.title || ''

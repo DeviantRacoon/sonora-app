@@ -2,9 +2,9 @@ import express from 'express'
 import { fileURLToPath } from 'node:url'
 import { access } from 'node:fs/promises'
 import { ZipFile } from 'yazl'
-import { search, playlist, isVideoId, isPlaylistId, safeName } from './services/ytdlp.js'
-import { enqueue, retry, snapshot, batchSnapshot, getBatch, holdFiles, events, preparePlayback } from './services/queue.js'
-import { cached } from './services/cache.js'
+import { search, playlist, isVideoId, isPlaylistId, safeName, stopChildren } from './services/ytdlp.js'
+import { enqueue, retry, removeBatch, purgeCompleted, snapshot, batchSnapshot, getBatch, holdFiles, events, preparePlayback, shutdownQueue } from './services/queue.js'
+import { cached, closeCache } from './services/cache.js'
 
 import { profileRoutes } from './services/profiles.js'
 
@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204)
   next()
 })
-app.use(express.json({ limit: '128kb' }))
+app.use(express.json({ limit: '1mb' }))
 const profiles = await profileRoutes()
 app.use('/api', (req, res, next) => /^\/(profile(?:\/|$)|recommendations$)/.test(req.path) ? profiles(req, res, next) : next())
 app.get('/api/health', (req, res) => res.json({ ok: true }))
@@ -35,7 +35,12 @@ app.use(['/api/downloads', '/api/audio'], (req, res, next) => {
   next()
 })
 
-const wrap = (fn) => (req, res) => fn(req, res).catch((e) => res.status(500).json({ error: e.message }))
+const wrap = (fn) => (req, res) => fn(req, res).catch((e) => {
+  if (res.destroyed) return
+  if (res.headersSent) return res.destroy(e)
+  if (e.retryAfter) res.set('Retry-After', String(e.retryAfter))
+  res.status(e.status || 500).json({ error: e.message })
+})
 
 app.get('/api/search', wrap(async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 200)
@@ -51,13 +56,11 @@ app.get('/api/playlist', wrap(async (req, res) => {
 
 app.post('/api/downloads', wrap(async (req, res) => {
   const { items, album } = req.body || {}
-  if (!Array.isArray(items) || !items.length || items.length > 200 || !items.every((i) => isVideoId(i?.id)))
+  if (!Array.isArray(items) || !items.length || items.length > 500 || !items.every((i) => isVideoId(i?.id)))
     return res.status(400).json({ error: 'Items inválidos' })
-  const batch = enqueue(items.map((i) => ({ id: i.id, title: String(i.title || i.id), index: i.index })), album ? String(album) : null, req.device)
+  const batch = await enqueue(items.map((i) => ({ id: i.id, title: String(i.title || i.id).slice(0, 500), index: i.index })), album ? String(album).slice(0, 500) : null, req.device)
   if (!batch) return res.status(429).json({ error: 'La cola está llena; inténtalo más tarde' })
-  const { saved, ...state } = batch
-  if (!await saved) return res.status(503).json({ error: 'No se pudo guardar la descarga; inténtalo de nuevo' })
-  res.json(state)
+  res.json(batch)
 }))
 
 app.get('/api/downloads/batches/:bid/file', wrap(async (req, res) => {
@@ -68,38 +71,81 @@ app.get('/api/downloads/batches/:bid/file', wrap(async (req, res) => {
   res.once('close', release)
   res.once('finish', release)
   try { await Promise.all(batch.files.map(({ file }) => access(file))) } catch (e) { release(); throw e }
-  if (batch.total === 1) return res.download(batch.files[0].file, `${safeName(batch.files[0].title)}.mp3`)
+
+  const autoClean = () => {
+    setTimeout(() => {
+      removeBatch(req.params.bid, req.device).catch(() => {})
+    }, 1500)
+  }
+  res.once('finish', autoClean)
+
+  if (batch.total === 1) {
+    return res.download(batch.files[0].file, `${safeName(batch.files[0].title)}.mp3`, (err) => {
+      if (err) res.off('finish', autoClean)
+    })
+  }
   res.attachment(`${safeName(batch.title)}.zip`)
   const archive = new ZipFile()
-  archive.on('error', (error) => res.destroy(error))
-  archive.outputStream.on('error', (error) => res.destroy(error))
+  archive.on('error', (error) => { res.off('finish', autoClean); res.destroy(error) })
+  archive.outputStream.on('error', (error) => { res.off('finish', autoClean); res.destroy(error) })
   res.on('close', () => archive.outputStream.destroy())
   archive.outputStream.pipe(res)
   batch.files.forEach(({ file, title }, index) => archive.addFile(file, `${String(index + 1).padStart(2, '0')} - ${safeName(title)}.mp3`, { compress: false }))
   archive.end()
 }))
 
-app.post('/api/downloads/:jid/retry', (req, res) => res.json({ ok: retry(Number(req.params.jid), req.device) }))
+app.post('/api/downloads/purge', wrap(async (req, res) => {
+  await purgeCompleted(req.device)
+  res.json({ ok: true })
+}))
+
+app.delete('/api/downloads/batches/:bid', wrap(async (req, res) => {
+  const ok = await removeBatch(req.params.bid, req.device)
+  if (!ok) return res.status(404).json({ error: 'Descarga no encontrada o en uso' })
+  res.json({ ok: true })
+}))
+
+app.post('/api/downloads/:jid/retry', wrap(async (req, res) => res.json({ ok: await retry(Number(req.params.jid), req.device) })))
 
 app.get('/api/downloads', (req, res) => res.set('Cache-Control', 'no-store').json({ jobs: snapshot(req.device), batches: batchSnapshot(req.device) }))
 
-// SSE: snapshot inicial + un evento por cambio de job
+// Coalesce progress per connection; terminal states flush immediately.
+const streams = new Set()
 app.get('/api/downloads/stream', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
   res.flushHeaders()
-  const send = (job, owner, playback = false) => { if (owner === req.device && !playback) res.write(`data: ${JSON.stringify(job)}\n\n`) }
+  streams.add(res)
+  const jobs = new Map(), batches = new Map()
+  let timer
+  const sendEvent = item => {
+    if (res.destroyed) return
+    if (res.writableLength > 1024 * 1024) return res.destroy()
+    res.write(`data: ${JSON.stringify(item)}\n\n`)
+  }
+  const flush = () => {
+    clearTimeout(timer); timer = null
+    if (jobs.size || batches.size) sendEvent({ type: 'updates', jobs: [...jobs.values()], batches: [...batches.values()] })
+    jobs.clear(); batches.clear()
+  }
+  const send = (item, owner, playback = false) => {
+    if (owner !== req.device || playback) return
+    if (item.type === 'batch_removed') { flush(); sendEvent(item); return }
+    if (item.type === 'job') jobs.set(item.jid, item)
+    if (item.type === 'batch') batches.set(item.bid, item)
+    if (item.status === 'done' || item.status === 'error' || item.ready) flush()
+    else timer ||= setTimeout(flush, 250)
+  }
   events.on('job', send)
-  batchSnapshot(req.device).forEach(job => send(job, req.device))
-  snapshot(req.device).forEach(job => send(job, req.device))
-  req.on('close', () => events.off('job', send))
+  sendEvent({ type: 'snapshot', jobs: snapshot(req.device), batches: batchSnapshot(req.device) })
+  req.on('close', () => { clearTimeout(timer); events.off('job', send); streams.delete(res) })
 })
 
 // Keep preparation in the bounded download queue; native audio supports HTTP ranges.
 app.get('/api/audio/:id', wrap(async (req, res) => {
   if (!isVideoId(req.params.id)) return res.status(400).json({ error: 'ID de canción inválido' })
-  const queued = preparePlayback(req.params.id, req.device)
+  const queued = await preparePlayback(req.params.id, req.device)
   if (!queued) return res.status(429).json({ error: 'La cola está llena; inténtalo más tarde' })
-  if (!queued.ready) await new Promise((resolve, reject) => {
+  if (!getBatch(queued.bid, req.device)?.ready) await new Promise((resolve, reject) => {
     const cleanup = () => { clearTimeout(timer); events.off('job', update); res.off('close', closed) }
     const closed = () => { cleanup(); resolve() }
     const update = item => { if (item.type === 'batch' && item.bid === queued.bid && item.ready) { cleanup(); resolve() } }
@@ -123,4 +169,16 @@ app.use(express.static(dist, { setHeaders: (res, file) => { if (file.endsWith('/
 
 const port = process.env.PORT || 3001
 const host = process.env.HOST || '127.0.0.1'
-app.listen(port, host, () => console.log(`API en http://${host}:${port}`))
+const server = app.listen(port, host, () => console.log(`API en http://${host}:${port}`))
+let stopping = false
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, async () => {
+  if (stopping) return
+  stopping = true
+  const deadline = setTimeout(() => { stopChildren(); process.exit(0) }, 10_000)
+  server.close()
+  for (const stream of streams) stream.end()
+  await Promise.allSettled([shutdownQueue(), closeCache()])
+  clearTimeout(deadline)
+  stopChildren()
+  process.exit(0)
+})

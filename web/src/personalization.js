@@ -24,6 +24,13 @@ export async function profileRequest(path, method = 'GET', body) {
 export function recordTaste(track, kind, weight = 1) {
   if (personalizationEnabled()) profileRequest('/profile/events','POST',{ eventId: crypto.randomUUID(), track: { id:track.id,title:track.title,channel:track.channel || '' },kind,weight }).catch(() => {})
 }
+export function recordDownloads(items) {
+  if (!items.length || !personalizationEnabled()) return
+  return profileRequest('/profile/events/batch', 'POST', { events: items.map(track => ({
+    eventId: crypto.randomUUID(), track: { id: track.id, title: track.title.slice(0, 500), channel: (track.channel || '').slice(0, 300) },
+    kind: 'download', weight: Math.min(3, 3 / items.length),
+  })) }).catch(() => {})
+}
 export async function setPersonalization(enabled) {
   if (storage('sonora-profile')) await profileRequest('/profile','PATCH',{ enabled })
   storage('sonora-personalization',enabled ? 'on' : 'off')
