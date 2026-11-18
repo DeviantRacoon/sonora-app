@@ -2,7 +2,7 @@
 
 ## Búsqueda y playlists
 
-Sonora busca canciones y playlists en paralelo y muestra título, canal, duración y miniatura cuando están disponibles. Si falla solo la búsqueda de playlists, muestra las canciones y un aviso de resultados parciales. Una playlist extensa muestra sus primeras 200 entradas y un aviso.
+Sonora busca canciones y playlists en paralelo y muestra título, canal, duración y miniatura cuando están disponibles. Si falla solo la búsqueda de playlists, muestra las canciones y un aviso de resultados parciales. Una playlist extensa muestra sus primeras 500 entradas y un aviso.
 
 Las consultas idénticas en curso comparten el mismo resultado. Las búsquedas y playlists se conservan temporalmente en el servidor y el navegador; los fallos y resultados parciales no se guardan en caché. Durante la búsqueda, el contenido anterior no ocupa espacio en desktop: el indicador y el reproductor no generan scroll por elementos ocultos. Las listas largas sí permiten desplazarse.
 

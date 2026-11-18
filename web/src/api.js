@@ -44,38 +44,39 @@ export const purgeDownloadsApi = () => req('/api/downloads/purge', { method: 'PO
 
 export const fmt = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '')
 
+export function updateJobs(state, item) {
+  if (item.type === 'batch_removed') return {
+    jobs: Object.fromEntries(Object.entries(state.jobs).filter(([, job]) => job.bid !== item.bid)),
+    batches: Object.fromEntries(Object.entries(state.batches).filter(([bid]) => bid !== item.bid)),
+  }
+  const jobs = item.type === 'job' ? [item] : item.jobs || []
+  const batches = item.type === 'batch' ? [item] : item.batches || []
+  return {
+    jobs: { ...(item.type === 'snapshot' ? {} : state.jobs), ...Object.fromEntries(jobs.map(job => [job.jid, job])) },
+    batches: { ...(item.type === 'snapshot' ? {} : state.batches), ...Object.fromEntries(batches.map(batch => [batch.bid, batch])) },
+  }
+}
+
 // El servidor envía una instantánea completa al conectar o reconectar.
 export function useJobs() {
   const [state, setState] = useState({ jobs: {}, batches: {} })
   useEffect(() => {
-    let active = true
-    const poll = async () => {
-      try {
-        const data = await req('/api/downloads', { cache: 'no-store' })
-        if (active) setState({ jobs: Object.fromEntries(data.jobs.map((job) => [job.jid, job])), batches: Object.fromEntries(data.batches.map((batch) => [batch.bid, batch])) })
-      } catch { /* Retry on the next interval. */ }
+    if (location.hostname.endsWith('.trycloudflare.com')) {
+      let active = true, timer
+      const poll = async () => {
+        try {
+          const data = await req('/api/downloads', { cache: 'no-store' })
+          if (active) setState(previous => updateJobs(previous, { ...data, type: 'snapshot' }))
+        } catch { /* Retry on the next interval. */ }
+        if (active) timer = setTimeout(poll, 2000)
+      }
+      poll()
+      return () => { active = false; clearTimeout(timer) }
     }
-    poll()
-    const timer = setInterval(poll, 2000)
-
-    let es
-    if (!location.hostname.endsWith('.trycloudflare.com')) {
-      try {
-        es = new EventSource(deviceUrl('/api/downloads/stream'))
-        es.onmessage = (e) => {
-          if (!active) return
-          const item = JSON.parse(e.data)
-          if (item.type === 'job') setState((p) => ({ ...p, jobs: { ...p.jobs, [item.jid]: item } }))
-          if (item.type === 'batch') setState((p) => ({ ...p, batches: { ...p.batches, [item.bid]: item } }))
-          if (item.type === 'batch_removed') setState((p) => ({ jobs: Object.fromEntries(Object.entries(p.jobs).filter(([, job]) => job.bid !== item.bid)), batches: Object.fromEntries(Object.entries(p.batches).filter(([bid]) => bid !== item.bid)) }))
-        }
-      } catch {}
-    }
-
-    return () => {
-      active = false
-      clearInterval(timer)
-      if (es) es.close()
+    const es = new EventSource(deviceUrl('/api/downloads/stream'))
+    es.onmessage = (e) => {
+      const item = JSON.parse(e.data)
+      setState(previous => updateJobs(previous, item))
     }
   }, [])
   return { jobs: Object.values(state.jobs).sort((a, b) => b.jid - a.jid), batches: Object.values(state.batches).reverse() }

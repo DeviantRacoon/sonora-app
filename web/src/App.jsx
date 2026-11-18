@@ -23,7 +23,7 @@ import Preferences from './components/Preferences.jsx'
 import TrackRow from './components/TrackRow.jsx'
 import DownloadQueue from './components/DownloadQueue.jsx'
 
-import { profileRequest, recordTaste, setPersonalization, eraseProfile, personalizationEnabled } from './personalization.js'
+import { profileRequest, recordTaste, recordDownloads, setPersonalization, eraseProfile, personalizationEnabled } from './personalization.js'
 
 import Logo from './components/MotionLogo.jsx'
 
@@ -274,9 +274,9 @@ export default function App() {
   const allOn = tracks.length > 0 && tracks.every((t) => sel.has(t.id))
   const send = async (items, albumName) => {
     if (sending) return
-    if (items.length > 200) { setError('Selecciona hasta 200 canciones por descarga.'); return }
+    if (items.length > 500) { setError('Selecciona hasta 500 canciones por descarga.'); return }
     setError(''); setSending(true)
-    try { const batch = await downloadApi(items.map(({ id, title, index }) => ({ id, title, index })), albumName); items.forEach(t => recordTaste(t, 'download', Math.min(3, 3 / items.length))); setInitiated((current) => [...current, batch.bid]); showToast('Añadido a descargas.'); setSel(new Map()) }
+    try { const batch = await downloadApi(items.map(({ id, title, index }) => ({ id, title, index })), albumName); recordDownloads(items); setInitiated((current) => [...current, batch.bid]); showToast('Añadido a descargas.'); setSel(new Map()) }
     catch (e) { setError(e.message) }
     finally { setSending(false) }
   }
@@ -300,7 +300,7 @@ export default function App() {
       </section>
 
       {!album && results?.partial && <div className="notice" role="status">No se pudieron cargar las playlists; los resultados son parciales.</div>}
-      {album?.truncated && <div className="notice" role="status">Esta playlist muestra sus primeras 200 canciones.</div>}
+      {album?.truncated && <div className="notice" role="status">Esta playlist muestra sus primeras 500 canciones.</div>}
 
       {error && <div className="notice error" role="alert">{error}</div>}
       {sending && <div className="loading-line" role="status"><Logo loading /><span>Preparando descargas…</span></div>}

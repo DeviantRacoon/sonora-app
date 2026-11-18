@@ -24,16 +24,33 @@ export const isPlaylistId = (s) => typeof s === 'string' && /^[\w-]{12,64}$/.tes
 export const safeName = (s) => String(s).replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/^\.+/, '').trim().slice(0, 100) || 'Album'
 
 const children = new Set()
-process.on('exit', () => { for (const child of children) child.kill('SIGKILL') })
-for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => process.exit(0))
+let stopping = false
+export function stopChildren() {
+  stopping = true
+  for (const entry of pending.splice(0)) entry.reject(busy())
+  for (const child of children) child.kill('SIGKILL')
+}
+process.on('exit', stopChildren)
 
+const busy = () => Object.assign(new Error('Consultas ocupadas; inténtalo más tarde'), { status: 503, retryAfter: 5 })
 const pending = []
 let running = 0
 async function querySlot(fn) {
-  if (running >= 4) await new Promise((resolve) => pending.push(resolve))
+  if (stopping) throw busy()
+  if (running >= 4) {
+    if (pending.length >= 32) throw busy()
+    await new Promise((resolve, reject) => {
+      const entry = { resolve: () => { clearTimeout(timer); resolve() }, reject: error => { clearTimeout(timer); reject(error) } }
+      const timer = setTimeout(() => {
+        pending.splice(pending.indexOf(entry), 1)
+        reject(busy())
+      }, 15_000)
+      pending.push(entry)
+    })
+  }
   else running++
   try { return await fn() } finally {
-    if (pending.length) pending.shift()()
+    if (pending.length) pending.shift().resolve()
     else running--
   }
 }
@@ -87,13 +104,14 @@ export async function search(q) {
 }
 
 export async function playlist(id) {
-  const d = await json(['--playlist-end', '201', `https://www.youtube.com/playlist?list=${id}`])
+  const d = await json(['--playlist-end', '501', `https://www.youtube.com/playlist?list=${id}`])
   const entries = d.entries || []
-  return { id, title: d.title, tracks: entries.slice(0, 200).filter((e) => isVideoId(e.id)).map(track), truncated: entries.length > 200 || d.playlist_count > 200 }
+  return { id, title: d.title, tracks: entries.slice(0, 500).filter((e) => isVideoId(e.id)).map(track), truncated: entries.length > 500 || d.playlist_count > 500 }
 }
 
 export async function download({ id, directory }, onProgress) {
   await mkdir(directory, { recursive: true })
+  if (stopping) throw busy()
   const p = spawn(BIN, [...jsRuntime, ...ffmpegArgs, '-x', '--audio-format', 'mp3', '--audio-quality', '320K', '--embed-thumbnail', '--embed-metadata', '--no-playlist', '--newline', '--progress', '--progress-template', 'PCT:%(progress._percent_str)s', '--print', 'after_move:FILE:%(filepath)s', '-o', path.join(directory, '%(title)s.%(ext)s'), `https://www.youtube.com/watch?v=${id}`])
   let out = '', file = ''
   await processResult(p, 30 * 60_000, (d) => {

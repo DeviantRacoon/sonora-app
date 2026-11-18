@@ -24,6 +24,7 @@ Las rutas `/api/downloads` (incluidas sus subrutas) y `/api/audio/:id` requieren
 | `PATCH /api/profile` | `{ enabled: boolean }`: activa o desactiva conservando el perfil. |
 | `DELETE /api/profile` | Elimina el perfil, actividad y preferencias; devuelve `{ ok: true }`. |
 | `POST /api/profile/events` | `{ eventId, track: { id, title, channel }, kind, weight? }`, con `kind` igual a `play` o `download`. |
+| `POST /api/profile/events/batch` | `{ events: [...] }`: de 1 a 500 eventos con el mismo formato, validados e insertados juntos. |
 | `PUT /api/profile/preferences/:id` | `{ track: { id, title, channel }, kind }`, con `kind` igual a `like`, `exclude` o `null` para quitar la preferencia. |
 | `GET /api/recommendations` | Devuelve `{ state, tracks, preferences }` para el perfil. |
 
@@ -45,6 +46,8 @@ Salvo crear un perfil y consultar salud, estas rutas necesitan `Authorization: B
 
 `GET /api/audio/:id` prepara o reutiliza un MP3 mediante la cola limitada. Responde con `audio/mpeg` y admite `Range` (206 para rangos válidos). Un ID inválido devuelve 400, falta de capacidad devuelve 429 y un trabajo terminado sin audio disponible devuelve 502. La espera de preparación se limita a tres minutos; un error de esa espera devuelve 500. El cliente puede volver a solicitar el audio para reintentar. Estos trabajos no se publican en el historial visible ni en su SSE.
 
-`GET /api/downloads` devuelve `{ jobs, batches }` sin caché para el navegador identificado. El cliente lo consulta cada dos segundos cuando el hostname de la interfaz termina en `.trycloudflare.com`; en otros orígenes utiliza SSE. Sus eventos tienen `type` igual a `job`, `batch` o `batch_removed`.
+`GET /api/downloads` devuelve `{ jobs, batches }` sin caché para el navegador identificado. El cliente lo consulta cada dos segundos cuando el hostname de la interfaz termina en `.trycloudflare.com`; en otros orígenes utiliza SSE. SSE comienza con `{ type: "snapshot", jobs, batches }` y continúa con `{ type: "updates", jobs, batches }` agrupados cada 250 ms, con estados finales inmediatos; la eliminación conserva `{ type: "batch_removed", bid }`. Los trabajos incluyen `attempts` (intentos iniciados) y `nextAttemptAt` (timestamp en milisegundos o `null`). El polling espera a terminar cada petición antes de programar la siguiente.
 
-Crear lotes exige de 1 a 200 canciones con ID válido; datos inválidos devuelven 400 y falta de capacidad global devuelve 429. Un archivo de lote inexistente o ajeno devuelve 404; si todavía no está listo, 409. Un lote de una canción entrega MP3; varias canciones entregan ZIP con los archivos que terminaron correctamente. Un reintento ajeno, no fallido o sin capacidad devuelve `{ ok: false }`.
+Crear lotes exige de 1 a 500 canciones con ID válido; datos inválidos devuelven 400 y falta de capacidad global devuelve 429. Un archivo de lote inexistente o ajeno devuelve 404; si todavía no está listo, 409. Un lote de una canción entrega MP3; varias canciones entregan ZIP con los archivos que terminaron correctamente. Un fallo de persistencia devuelve 503; los lotes solo se ejecutan después de confirmar su guardado. Un reintento ajeno, no fallido o sin capacidad devuelve `{ ok: false }`.
+
+Las respuestas públicas de búsqueda y playlists utilizan caché de diez minutos en memoria y PostgreSQL. La saturación de consultas devuelve 503 con `Retry-After`; los resultados personalizados y las respuestas de descargas no entran en esta caché. El límite del cuerpo JSON es 1 MiB y los títulos de descargas se acotan a 500 caracteres.

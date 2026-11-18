@@ -19,7 +19,7 @@ Detalle completo en [funcionalidades](docs/funcionalidades.md).
 Navegador (React + Vite, PWA)
         │  /api
         ▼
-Express (Node) ──► yt-dlp + FFmpeg ──► MP3 / ZIP  (SQLite + archivos en MUSIC_DIR)
+Express (Node) ──► yt-dlp + FFmpeg ──► MP3 / ZIP  (cola en PostgreSQL + archivos en MUSIC_DIR)
         │
         └────────► PostgreSQL (perfiles y recomendaciones, opcional)
 ```
@@ -67,18 +67,21 @@ Instalación de `cloudflared`, dominio fijo, verificación y resolución de prob
 
 ## Todo en Docker (imagen + túnel)
 
-La imagen incluye la API y el frontend compilado (mismo origen), así que se puede compartir sin Bun ni Node en el host:
+La imagen incluye la API, el frontend compilado (mismo origen), `yt-dlp` y `ffmpeg`, y PostgreSQL corre en su propio contenedor. Con solo Docker instalado:
 
 ```sh
+git clone <repo> && cd music-downloader
 docker compose up -d --build                      # API + frontend en http://localhost:3001, con PostgreSQL
-mkdir -p .certs && cp /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem .certs/ca-bundle.pem   # una vez (ver nota)
-docker compose --profile tunnel up -d             # añade cloudflared
+docker compose --profile tunnel up -d             # opcional: añade cloudflared
 docker compose logs tunnel | grep -o 'https://[a-z-]*\.trycloudflare\.com' | grep -v '//api\.'   # URL pública
 docker compose --profile tunnel stop tunnel       # cerrar el túnel (la URL cambia al reiniciarlo)
 ```
 
+- No necesita `.env`: la contraseña de PostgreSQL por defecto es `sonora-local` (el puerto solo escucha en `127.0.0.1`). Para otra, define `POSTGRES_PASSWORD` (y `MUSIC_USER_AGENT` con un contacto real) en `.env`.
 - No lo combines con `bun run dev` ni `bun run tunnel`: todos usan el puerto 3001.
-- Nota `.certs`: `cloudflared` en contenedor necesita las CAs del host si tu red inspecciona TLS (error `x509: certificate signed by unknown authority`). En Debian/Ubuntu copia `/etc/ssl/certs/ca-certificates.crt`. Si no lo necesitas, un archivo cualquiera con las CAs públicas basta.
+- Redes que inspeccionan TLS (error `x509: certificate signed by unknown authority`): crea `.certs/ca-bundle.pem` con las CAs del host y levanta con `-f compose.yaml -f compose.certs.yaml`.
+  - Fedora: copia `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`. Debian/Ubuntu: `/etc/ssl/certs/ca-certificates.crt`.
+  - Windows (PowerShell): `mkdir .certs; curl.exe -o .certs\ca-bundle.pem https://curl.se/ca/cacert.pem`; añade al final la CA corporativa en Base64 si aplica.
 - Tras cambiar código, repite `docker compose up -d --build` (no hay recarga en caliente).
 
 ## Despliegue
@@ -144,5 +147,5 @@ TEST_DATABASE_URL=postgres://usuario:clave@localhost:5432/sonora_test node --tes
 ## Notas importantes
 
 - El identificador `sonora-device` es privado: no compartas enlaces de archivos o audio que lo incluyan (`?device=...`).
-- Mantén **una sola instancia** del backend; la cola SQLite y los eventos están diseñados para un proceso.
+- Mantén **una sola instancia** del backend; los eventos y la cola en memoria están diseñados para un proceso; sin `DATABASE_URL` la cola no sobrevive a reinicios.
 - No expongas PostgreSQL públicamente y respalda con `pg_dump` y el volumen de música antes de cambiar infraestructura.
